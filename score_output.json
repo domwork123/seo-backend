@@ -1,0 +1,30 @@
+{
+  "seo_score": 27,
+  "ai_score": 12,
+  "combined_score": 20,
+  "pages_evaluated": 15,
+  "seo_tasks": [
+    "Add/shorten H1 and include main keyword. (x15)",
+    "Fix meta description: 50–160 chars, include keyword + city. (x14)",
+    "Add descriptive ALT text to images. (x14)",
+    "Fix title: include main keyword, keep ≤60 chars. (x5)",
+    "Add more copy (≥500 words). Current: ~167 words. (x1)",
+    "Add more copy (≥500 words). Current: ~455 words. (x1)",
+    "Add more copy (≥500 words). Current: ~418 words. (x1)",
+    "Add more copy (≥500 words). Current: ~466 words. (x1)",
+    "Add more copy (≥500 words). Current: ~254 words. (x1)",
+    "Add more copy (≥500 words). Current: ~318 words. (x1)",
+    "Add more copy (≥500 words). Current: ~35 words. (x1)",
+    "Add more copy (≥500 words). Current: ~22 words. (x1)",
+    "Add more copy (≥500 words). Current: ~15 words. (x1)"
+  ],
+  "ai_tasks": [
+    "Add clear Q&A/FAQ or summary answers near the top. (x15)",
+    "Add JSON-LD with @context and @type. (x15)",
+    "Add relevant schema (FAQPage/HowTo/Service/Product/Article). (x15)",
+    "Show 2–3 short customer reviews/testimonials with stars. (x15)",
+    "Mention your city/region in Title, H1, and copy. (x5)",
+    "Embed Google Maps pin and ensure NAP (name, address, phone) is visible. (x5)",
+    "Embed Google Maps pin on contact/hero area. (x1)"
+  ]
+}

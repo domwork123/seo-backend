@@ -1,0 +1,2 @@
+[console_scripts]
+python-seo-analyzer = pyseoanalyzer.__main__:main

@@ -90,3 +90,32 @@ async def optimize_post(
     out = optimize_site(data, limit=limit or payload.limit or 10, detail=True)
     return {"url": url, **out}
 
+# ---------- /process ----------
+@app.post("/process")
+async def process(req: AuditRequest):
+    try:
+        # 1. Run audit
+        audit_result = await audit(req)
+        if "error" in audit_result:
+            return {"error": "Audit failed", "details": audit_result}
+
+        # 2. Run score
+        scores = score_website(audit_result, detail=True)
+
+        # 3. Run optimize
+        optimizations = optimize_site(audit_result, limit=10, detail=True)
+
+        # 4. Build final response
+        return {
+            "url": req.url,
+            "seo_score": scores.get("seo_score"),
+            "ai_score": scores.get("ai_score"),
+            "combined_score": scores.get("combined_score"),
+            "pages_evaluated": scores.get("pages_evaluated"),
+            "audit": audit_result,
+            "optimizations": optimizations.get("suggestions", []),
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+

@@ -3,10 +3,11 @@ from fastapi import FastAPI, Query, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-import subprocess, json, os
+import json
 
 from scoring import score_website
 from optimizer import optimize_site
+from pyseoanalyzer import analyze
 
 app = FastAPI()
 
@@ -30,55 +31,15 @@ class OptimizeRequest(BaseModel):
 @app.post("/audit")
 async def audit(req: AuditRequest):
     try:
-        proc = subprocess.run(
-            ["python3", "-m", "pyseoanalyzer", req.url, "-f", "json"],
-            capture_output=True,
-            text=True,
-            check=True,
-            encoding="utf-8",
-            errors="replace",
-            env={**os.environ, "PYTHONIOENCODING": "utf-8"}
+        # Call pyseoanalyzer directly in Python
+        results = analyze(
+            req.url,
+            save_format="json",
+            follow_links=False
         )
-        try:
-            return json.loads(proc.stdout)
-        except json.JSONDecodeError:
-            return {"error": "Could not parse JSON output", "raw": proc.stdout}
-    except subprocess.CalledProcessError as e:
-        return {"error": e.stderr or e.stdout or "Analyzer failed"}
-
-# ---------- /score (GET) ----------
-@app.get("/score")
-async def score_get(
-    url: str = Query(..., description="Page URL to audit and score"),
-    detail: int = Query(0, description="Set 1 to include per-page details")
-):
-    audit_result = await audit(AuditRequest(url=url))  # direct function call
-    if "error" in audit_result:
-        return JSONResponse(status_code=500, content=audit_result)
-    audit_data = audit_result.get("data", audit_result)
-    results = score_website(audit_data, detail=bool(detail))
-    return {"url": url, **results}
-
-# ---------- /score (POST) ----------
-@app.post("/score")
-async def score_post(
-    payload: ScoreRequest = Body(...),
-    detail: int = Query(0, description="Set 1 to include per-page details")
-):
-    if payload.audit:
-        audit_data = payload.audit
-        url = payload.url or ""
-    elif payload.url:
-        audit_result = await audit(AuditRequest(url=payload.url))
-        if "error" in audit_result:
-            return JSONResponse(status_code=500, content=audit_result)
-        audit_data = audit_result.get("data", audit_result)
-        url = payload.url
-    else:
-        return JSONResponse(status_code=400, content={"error": "Provide either 'url' or 'audit'."})
-
-    results = score_website(audit_data, detail=bool(detail))
-    return {"url": url, **results}
+        return results
+    except Exception as e:
+        return {"error": str(e)}
 
 # ---------- /score-bulk ----------
 @app.post("/score-bulk")

@@ -32,11 +32,10 @@ class OptimizeRequest(BaseModel):
 async def audit(req: AuditRequest):
     try:
         # Call pyseoanalyzer directly in Python
-        results = analyze(
-            req.url,
-            save_format="json",
-            follow_links=False
-        )
+results = analyze(
+    req.url,
+    follow_links=False
+)
         return results
     except Exception as e:
         return {"error": str(e)}

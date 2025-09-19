@@ -2,3 +2,8 @@ fastapi
 uvicorn[standard]
 httpx
 pyseoanalyzer
+langdetect
+beautifulsoup4
+ftfy
+lxml
+requests

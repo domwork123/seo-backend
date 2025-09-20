@@ -122,6 +122,9 @@ async def optimize_post(
 @app.post("/process")
 async def process(req: AuditRequest):
     try:
+        # 👇 Add this line
+        print("DEBUG: NEW PROCESS DEPLOYED")
+
         # Run audit
         audit_results = analyze(req.url)
 
@@ -170,7 +173,7 @@ async def process(req: AuditRequest):
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results  # always store full raw/dict
+            "results": score_results
         }).execute()
 
         return {

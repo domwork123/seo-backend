@@ -127,15 +127,20 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score (handle both dict and string)
+        # Run score (handle dict vs string)
         score_raw = score_website(req.url)
         if isinstance(score_raw, str):
             try:
-                score_results = json.loads(score_raw)   # if JSON string
+                score_results = json.loads(score_raw)   # JSON string
             except Exception:
-                score_results = {"raw_score": score_raw}  # if plain string
+                score_results = {"raw_score": score_raw}  # plain string
         else:
-            score_results = score_raw  # already a dict
+            score_results = score_raw  # already dict
+
+        # Extract values safely
+        seo_score = score_results.get("seo_score") if isinstance(score_results, dict) else None
+        ai_score = score_results.get("ai_score") if isinstance(score_results, dict) else None
+        combined_score = score_results.get("combined_score") if isinstance(score_results, dict) else None
 
         # Run optimization
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
@@ -160,9 +165,9 @@ async def process(req: AuditRequest):
         # 4️⃣ Insert into scores
         supabase.table("scores").insert({
             "site_id": site_id,
-            "seo_score": score_results.get("seo_score"),
-            "ai_score": score_results.get("ai_score"),
-            "combined_score": score_results.get("combined_score"),
+            "seo_score": seo_score,
+            "ai_score": ai_score,
+            "combined_score": combined_score,
             "results": score_results
         }).execute()
 

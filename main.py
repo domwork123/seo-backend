@@ -123,40 +123,38 @@ async def optimize_post(
 async def process(req: AuditRequest):
     try:
         print("DEBUG: NEW PROCESS DEPLOYED")
-
-        # Run audit
+            
+        # 1️⃣ Run audit
         audit_results = analyze(req.url)
-
-        # ✅ Run score correctly
+        
+        # 2️⃣ Run score correctly
         score_results = score_website(audit_results, detail=True)
-
-        # Extract safely
         seo_score = score_results.get("seo_score")
         ai_score = score_results.get("ai_score")
         combined_score = score_results.get("combined_score")
-
-        # Run optimization
+        
+        # 3️⃣ Run optimization
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
-
-        # 1️⃣ Insert into sites
+            
+        # 4️⃣ Insert into sites (once)
         site_insert = supabase.table("sites").insert({"url": req.url}).execute()
         site_id = site_insert.data[0]["id"]
-
-        # 2️⃣ Insert into audits
+         
+        # 5️⃣ Insert into audits
         supabase.table("audits").insert({
             "site_id": site_id,
             "url": req.url,
             "results": audit_results
         }).execute()
-
-        # 3️⃣ Insert into optimizations
+        
+        # 6️⃣ Insert into optimizations
         supabase.table("optimizations").insert({
             "site_id": site_id,
             "url": req.url,
             "results": optimize_results
         }).execute()
-
-        # 4️⃣ Insert into scores
+        
+        # 7️⃣ Insert into scores
         supabase.table("scores").insert({
             "site_id": site_id,
             "seo_score": seo_score,
@@ -164,14 +162,15 @@ async def process(req: AuditRequest):
             "combined_score": combined_score,
             "results": score_results
         }).execute()
-
+        
+        # 8️⃣ Return clean response
         return {
             "url": req.url,
             "audit": audit_results,
             "score": score_results,
             "optimize": optimize_results
         }
-
+        
     except Exception as e:
         return {"error": "Process failed", "details": str(e)}
 

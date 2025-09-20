@@ -119,16 +119,25 @@ async def optimize_post(
         return {"error": str(e)}
 
 
+import json
+
 @app.post("/process")
 async def process(req: AuditRequest):
     try:
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score ✅ correct function
-        score_results = score_website(req.url)
+        # Run score (handle both dict and string)
+        score_raw = score_website(req.url)
+        if isinstance(score_raw, str):
+            try:
+                score_results = json.loads(score_raw)   # if JSON string
+            except Exception:
+                score_results = {"raw_score": score_raw}  # if plain string
+        else:
+            score_results = score_raw  # already a dict
 
-        # Run optimization ✅ correct function
+        # Run optimization
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
 
         # 1️⃣ Insert into sites
@@ -154,7 +163,7 @@ async def process(req: AuditRequest):
             "seo_score": score_results.get("seo_score"),
             "ai_score": score_results.get("ai_score"),
             "combined_score": score_results.get("combined_score"),
-            "results": score_results  # store full JSON
+            "results": score_results
         }).execute()
 
         return {

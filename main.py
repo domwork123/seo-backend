@@ -129,7 +129,7 @@ async def process(req: AuditRequest):
             return {"error": "Audit failed", "details": audit_result}
 
         # Save audit
-        audit_insert = supabase.table("audits").insert({
+        supabase.table("audits").insert({
             "url": req.url,
             "results": audit_result
         }).execute()

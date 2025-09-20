@@ -119,41 +119,29 @@ async def optimize_post(
         return {"error": str(e)}
 
 
-import json
-
 @app.post("/process")
 async def process(req: AuditRequest):
     try:
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score (force normalize into dict)
+        # Run score (handle dict vs string safely)
         score_raw = score_website(req.url)
-        print("DEBUG: score_website returned ->", score_raw, type(score_raw))
-
-        # Always wrap into a dict
-        score_results = {}
-        seo_score = None
-        ai_score = None
-        combined_score = None
 
         if isinstance(score_raw, str):
             try:
-                # Try to parse if it's JSON
-                score_results = json.loads(score_raw)
+                score_results = json.loads(score_raw)  # try to parse as JSON
+                if not isinstance(score_results, dict):
+                    score_results = {"raw_score": score_raw}
             except Exception:
-                # Fallback: wrap plain string
                 score_results = {"raw_score": score_raw}
-        elif isinstance(score_raw, dict):
-            score_results = score_raw
         else:
-            score_results = {"raw_score": str(score_raw)}
+            score_results = score_raw if isinstance(score_raw, dict) else {"raw_score": str(score_raw)}
 
-        # Only set these if keys exist
-        if isinstance(score_results, dict):
-            seo_score = score_results["seo_score"] if "seo_score" in score_results else None
-            ai_score = score_results["ai_score"] if "ai_score" in score_results else None
-            combined_score = score_results["combined_score"] if "combined_score" in score_results else None
+        # Safe extraction
+        seo_score = score_results.get("seo_score")
+        ai_score = score_results.get("ai_score")
+        combined_score = score_results.get("combined_score")
 
         # Run optimization
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
@@ -172,6 +160,7 @@ async def process(req: AuditRequest):
         # 3️⃣ Insert into optimizations
         supabase.table("optimizations").insert({
             "site_id": site_id,
+            "url": req.url,
             "results": optimize_results
         }).execute()
 
@@ -181,7 +170,7 @@ async def process(req: AuditRequest):
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results
+            "results": score_results  # always store full raw/dict
         }).execute()
 
         return {
@@ -193,4 +182,5 @@ async def process(req: AuditRequest):
 
     except Exception as e:
         return {"error": "Process failed", "details": str(e)}
+
 

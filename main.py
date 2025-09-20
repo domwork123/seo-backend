@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any, List
 import json
 import os
 from supabase import create_client, Client
+from fastapi.middleware.cors import CORSMiddleware   # 👈 ADD THIS LINE
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
@@ -16,6 +17,20 @@ from optimizer import optimize_site
 from pyseoanalyzer import analyze
 
 app = FastAPI()
+
+# ✅ Enable CORS so your frontend (tryevika.com) can call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://*.lovable.app",   # Lovable preview links
+        "https://*.lovable.dev",   # Lovable dev links
+        "https://tryevika.com",    # your live site
+        "http://localhost:3000",   # local dev testing
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------- models ----------
 class AuditRequest(BaseModel):

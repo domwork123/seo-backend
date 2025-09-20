@@ -39,14 +39,17 @@ async def audit(req: AuditRequest):
     try:
         # Call pyseoanalyzer directly in Python
         results = analyze(req.url)  # no extra args
-        # Save to Supabase
+
+        # Save audit to Supabase
         supabase.table("audits").insert({
             "url": req.url,
             "result": results
         }).execute()
+
         return results
     except Exception as e:
         return {"error": str(e)}
+
 
 # ---------- /score-bulk ----------
 @app.post("/score-bulk")
@@ -61,56 +64,56 @@ async def score_bulk(
             if "error" in audit_result:
                 output.append({"url": u, "error": audit_result["error"]})
                 continue
+
             data = audit_result.get("data", audit_result)
-scores = score_website(data, detail=bool(detail))
-row = {"url": u, **scores}
+            scores = score_website(data, detail=bool(detail))
 
-# save to Supabase
-supabase.table("scores").insert(row).execute()
+            # Save scores to Supabase
+            supabase.table("scores").insert({
+                "url": u,
+                "scores": scores
+            }).execute()
 
-output.append(row)
-
+            output.append({"url": u, **scores})
         except Exception as e:
             output.append({"url": u, "error": str(e)})
+
     return {"results": output}
 
+
 # ---------- /optimize ----------
-@app.get("/optimize")
-async def optimize_get(
-    url: str = Query(...),
-    limit: int = Query(10, ge=1, le=50)
-):
-    audit_result = await audit(AuditRequest(url=url))
-    if "error" in audit_result:
-        return JSONResponse(status_code=500, content=audit_result)
-    data = audit_result.get("data", audit_result)
-out = optimize_site(data, limit=limit, detail=True)
-row = {"url": url, **out}
-
-# save to Supabase
-supabase.table("optimizations").insert(row).execute()
-
-return row
-
 @app.post("/optimize")
 async def optimize_post(
     payload: OptimizeRequest = Body(...),
     limit: int = Query(10, ge=1, le=50)
 ):
-    if payload.audit:
-        data = payload.audit
-        url = payload.url or ""
-    elif payload.url:
-        audit_result = await audit(AuditRequest(url=payload.url))
-        if "error" in audit_result:
-            return JSONResponse(status_code=500, content=audit_result)
-        data = audit_result.get("data", audit_result)
-        url = payload.url
-    else:
-        return JSONResponse(status_code=400, content={"error": "Provide either 'url' or 'audit'."})
+    try:
+        if payload.audit:
+            data = payload.audit
+            url = payload.url or ""
+        elif payload.url:
+            audit_result = await audit(AuditRequest(url=payload.url))
+            if "error" in audit_result:
+                return JSONResponse(status_code=500, content=audit_result)
+            data = audit_result.get("data", audit_result)
+            url = payload.url
+        else:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Provide either 'url' or 'audit'."}
+            )
 
-    out = optimize_site(data, limit=limit or payload.limit or 10, detail=True)
-    return {"url": url, **out}
+        out = optimize_site(data, limit=limit or payload.limit or 10, detail=True)
+
+        # Save optimizations to Supabase
+        supabase.table("optimizations").insert({
+            "url": url,
+            "result": out
+        }).execute()
+
+        return {"url": url, **out}
+    except Exception as e:
+        return {"error": str(e)}
 
 # ---------- /process ----------
 @app.post("/process")

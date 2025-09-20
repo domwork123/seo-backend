@@ -4,6 +4,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import json
+import os
+from supabase import create_client, Client
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 from scoring import score_website
 from optimizer import optimize_site
@@ -32,8 +38,16 @@ class OptimizeRequest(BaseModel):
 async def audit(req: AuditRequest):
     try:
         # Call pyseoanalyzer directly in Python
-        results = analyze(req.url)  # no extra args
-        return results
+results = analyze(req.url)  # no extra args
+
+# save to Supabase
+supabase.table("audits").insert({
+    "url": req.url,
+    "result": results
+}).execute()
+
+return results
+
     except Exception as e:
         return {"error": str(e)}
 
@@ -51,8 +65,14 @@ async def score_bulk(
                 output.append({"url": u, "error": audit_result["error"]})
                 continue
             data = audit_result.get("data", audit_result)
-            scores = score_website(data, detail=bool(detail))
-            output.append({"url": u, **scores})
+scores = score_website(data, detail=bool(detail))
+row = {"url": u, **scores}
+
+# save to Supabase
+supabase.table("scores").insert(row).execute()
+
+output.append(row)
+
         except Exception as e:
             output.append({"url": u, "error": str(e)})
     return {"results": output}
@@ -67,8 +87,13 @@ async def optimize_get(
     if "error" in audit_result:
         return JSONResponse(status_code=500, content=audit_result)
     data = audit_result.get("data", audit_result)
-    out = optimize_site(data, limit=limit, detail=True)
-    return {"url": url, **out}
+out = optimize_site(data, limit=limit, detail=True)
+row = {"url": url, **out}
+
+# save to Supabase
+supabase.table("optimizations").insert(row).execute()
+
+return row
 
 @app.post("/optimize")
 async def optimize_post(

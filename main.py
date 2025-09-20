@@ -38,16 +38,13 @@ class OptimizeRequest(BaseModel):
 async def audit(req: AuditRequest):
     try:
         # Call pyseoanalyzer directly in Python
-results = analyze(req.url)  # no extra args
-
-# save to Supabase
-supabase.table("audits").insert({
-    "url": req.url,
-    "result": results
-}).execute()
-
-return results
-
+        results = analyze(req.url)  # no extra args
+        # Save to Supabase
+        supabase.table("audits").insert({
+            "url": req.url,
+            "result": results
+        }).execute()
+        return results
     except Exception as e:
         return {"error": str(e)}
 

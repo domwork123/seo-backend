@@ -125,11 +125,11 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score
-        score_results = get_score(req.url)
+        # Run score ✅ correct function
+        score_results = score_website(req.url)
 
-        # Run optimization
-        optimize_results = get_optimization(req.url)
+        # Run optimization ✅ correct function
+        optimize_results = optimize_site(audit_results, limit=10, detail=True)
 
         # 1️⃣ Insert into sites
         site_insert = supabase.table("sites").insert({"url": req.url}).execute()

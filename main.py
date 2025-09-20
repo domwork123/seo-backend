@@ -127,27 +127,25 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score (with debug print)
+        # Run score (force wrap into dict)
         score_raw = score_website(req.url)
         print("DEBUG: score_website returned ->", score_raw, type(score_raw))
 
-        # Normalize score output
+        # Always turn into a dict
         if isinstance(score_raw, str):
             try:
-                score_results = json.loads(score_raw)   # parse JSON string
+                score_results = json.loads(score_raw)   # If JSON string
             except Exception:
-                score_results = {"raw_score": score_raw}  # wrap plain string
+                score_results = {"raw_score": score_raw}  # Wrap plain string
+        elif isinstance(score_raw, dict):
+            score_results = score_raw
         else:
-            score_results = score_raw  # already dict
+            score_results = {"raw_score": str(score_raw)}
 
-        # Extract scores safely
-        seo_score = None
-        ai_score = None
-        combined_score = None
-        if isinstance(score_results, dict):
-            seo_score = score_results.get("seo_score")
-            ai_score = score_results.get("ai_score")
-            combined_score = score_results.get("combined_score")
+        # Extract safely
+        seo_score = score_results.get("seo_score") if isinstance(score_results, dict) else None
+        ai_score = score_results.get("ai_score") if isinstance(score_results, dict) else None
+        combined_score = score_results.get("combined_score") if isinstance(score_results, dict) else None
 
         # Run optimization
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
@@ -175,7 +173,7 @@ async def process(req: AuditRequest):
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results if isinstance(score_results, dict) else {"raw_score": score_results}
+            "results": score_results
         }).execute()
 
         return {

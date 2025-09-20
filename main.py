@@ -127,11 +127,11 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-# Run score (handle dict vs string)
-score_raw = score_website(req.url)
-print("DEBUG: score_website returned ->", score_raw, type(score_raw))
+        # Run score (with debug print)
+        score_raw = score_website(req.url)
+        print("DEBUG: score_website returned ->", score_raw, type(score_raw))
 
-        # Try to normalize
+        # Normalize score output
         if isinstance(score_raw, str):
             try:
                 score_results = json.loads(score_raw)   # parse JSON string
@@ -140,7 +140,7 @@ print("DEBUG: score_website returned ->", score_raw, type(score_raw))
         else:
             score_results = score_raw  # already dict
 
-        # Extract scores safely (only if dict has them)
+        # Extract scores safely
         seo_score = None
         ai_score = None
         combined_score = None
@@ -175,7 +175,7 @@ print("DEBUG: score_website returned ->", score_raw, type(score_raw))
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results  # always store full raw/dict
+            "results": score_results if isinstance(score_results, dict) else {"raw_score": score_results}
         }).execute()
 
         return {

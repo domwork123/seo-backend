@@ -127,8 +127,8 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score (handle dict vs string)
-        score_raw = score_website(req.url)
+# Run score (handle dict vs string)
+score_raw = score_website(req.url)
 print("DEBUG: score_website returned ->", score_raw, type(score_raw))
 
         # Try to normalize

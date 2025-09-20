@@ -122,25 +122,32 @@ async def optimize_post(
 @app.post("/process")
 async def process(req: AuditRequest):
     try:
-        # Debug marker to confirm new code is live
         print("DEBUG: NEW PROCESS DEPLOYED")
 
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score (handle dict vs string safely)
+        # Run score
         score_raw = score_website(req.url)
-        print("DEBUG: score_raw =", score_raw, type(score_raw))
+        print("DEBUG: score_raw (raw return) =", score_raw, type(score_raw))
 
-        if isinstance(score_raw, str):
+        # Force normalize to dict
+        score_results = {}
+        if isinstance(score_raw, dict):
+            score_results = score_raw
+        elif isinstance(score_raw, str):
             try:
-                score_results = json.loads(score_raw)  # try to parse as JSON
-                if not isinstance(score_results, dict):
-                    score_results = {"raw_score": score_raw}
+                parsed = json.loads(score_raw)
+                if isinstance(parsed, dict):
+                    score_results = parsed
+                else:
+                    score_results = {"raw_score": parsed}
             except Exception:
                 score_results = {"raw_score": score_raw}
         else:
-            score_results = score_raw if isinstance(score_raw, dict) else {"raw_score": str(score_raw)}
+            score_results = {"raw_score": str(score_raw)}
+
+        print("DEBUG: score_results (normalized) =", score_results, type(score_results))
 
         # Safe extraction
         seo_score = score_results.get("seo_score")
@@ -174,7 +181,7 @@ async def process(req: AuditRequest):
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results  # always store full raw/dict
+            "results": score_results
         }).execute()
 
         return {
@@ -186,5 +193,4 @@ async def process(req: AuditRequest):
 
     except Exception as e:
         return {"error": "Process failed", "details": str(e)}
-
 

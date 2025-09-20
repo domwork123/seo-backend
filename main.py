@@ -43,7 +43,7 @@ async def audit(req: AuditRequest):
         # Save audit to Supabase
         supabase.table("audits").insert({
             "url": req.url,
-            "result": results
+            "results": results  # ✅ column name matches schema
         }).execute()
 
         return results
@@ -68,10 +68,13 @@ async def score_bulk(
             data = audit_result.get("data", audit_result)
             scores = score_website(data, detail=bool(detail))
 
-            # Save scores to Supabase
+            # Save scores to Supabase ✅
             supabase.table("scores").insert({
                 "url": u,
-                "scores": scores
+                "seo_score": scores.get("seo_score"),
+                "ai_score": scores.get("ai_score"),
+                "combined_score": scores.get("combined_score"),
+                "details": scores  # put full JSON into details column
             }).execute()
 
             output.append({"url": u, **scores})
@@ -105,15 +108,16 @@ async def optimize_post(
 
         out = optimize_site(data, limit=limit or payload.limit or 10, detail=True)
 
-        # Save optimizations to Supabase
+        # Save optimizations to Supabase ✅
         supabase.table("optimizations").insert({
             "url": url,
-            "result": out
+            "results": out
         }).execute()
 
         return {"url": url, **out}
     except Exception as e:
         return {"error": str(e)}
+
 
 # ---------- /process ----------
 @app.post("/process")
@@ -124,11 +128,32 @@ async def process(req: AuditRequest):
         if "error" in audit_result:
             return {"error": "Audit failed", "details": audit_result}
 
+        # Save audit
+        audit_insert = supabase.table("audits").insert({
+            "url": req.url,
+            "results": audit_result
+        }).execute()
+
         # 2. Run score
         scores = score_website(audit_result, detail=True)
 
+        # Save scores
+        supabase.table("scores").insert({
+            "url": req.url,
+            "seo_score": scores.get("seo_score"),
+            "ai_score": scores.get("ai_score"),
+            "combined_score": scores.get("combined_score"),
+            "details": scores
+        }).execute()
+
         # 3. Run optimize
         optimizations = optimize_site(audit_result, limit=10, detail=True)
+
+        # Save optimizations
+        supabase.table("optimizations").insert({
+            "url": req.url,
+            "results": optimizations
+        }).execute()
 
         # 4. Build final response
         return {

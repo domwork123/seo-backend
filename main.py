@@ -127,33 +127,10 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score safely
-        try:
-            score_raw = score_website(req.url)
-            print("DEBUG: score_raw (raw return) =", score_raw, type(score_raw))
-        except Exception as err:
-            print("DEBUG: score_website crashed:", err)
-            score_raw = {"raw_score": f"error: {str(err)}"}
+        # ✅ Run score correctly
+        score_results = score_website(audit_results, detail=True)
 
-        # Force normalize to dict
-        score_results = {}
-        if isinstance(score_raw, dict):
-            score_results = score_raw
-        elif isinstance(score_raw, str):
-            try:
-                parsed = json.loads(score_raw)
-                if isinstance(parsed, dict):
-                    score_results = parsed
-                else:
-                    score_results = {"raw_score": parsed}
-            except Exception:
-                score_results = {"raw_score": score_raw}
-        else:
-            score_results = {"raw_score": str(score_raw)}
-
-        print("DEBUG: score_results (normalized) =", score_results, type(score_results))
-
-        # Safe extraction
+        # Extract safely
         seo_score = score_results.get("seo_score")
         ai_score = score_results.get("ai_score")
         combined_score = score_results.get("combined_score")

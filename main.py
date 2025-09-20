@@ -119,53 +119,51 @@ async def optimize_post(
         return {"error": str(e)}
 
 
-# ---------- /process ----------
 @app.post("/process")
 async def process(req: AuditRequest):
     try:
-        # 1. Run audit
-        audit_result = await audit(req)
-        if "error" in audit_result:
-            return {"error": "Audit failed", "details": audit_result}
+        # Run audit
+        audit_results = analyze(req.url)
 
-        # Save audit
+        # Run score
+        score_results = get_score(req.url)
+
+        # Run optimization
+        optimize_results = get_optimization(req.url)
+
+        # 1️⃣ Insert into sites
+        site_insert = supabase.table("sites").insert({"url": req.url}).execute()
+        site_id = site_insert.data[0]["id"]
+
+        # 2️⃣ Insert into audits
         supabase.table("audits").insert({
+            "site_id": site_id,
             "url": req.url,
-            "results": audit_result
+            "results": audit_results
         }).execute()
 
-        # 2. Run score
-        scores = score_website(audit_result, detail=True)
-
-        # Save scores
-        supabase.table("scores").insert({
-            "url": req.url,
-            "seo_score": scores.get("seo_score"),
-            "ai_score": scores.get("ai_score"),
-            "combined_score": scores.get("combined_score"),
-            "details": scores
-        }).execute()
-
-        # 3. Run optimize
-        optimizations = optimize_site(audit_result, limit=10, detail=True)
-
-        # Save optimizations
+        # 3️⃣ Insert into optimizations
         supabase.table("optimizations").insert({
-            "url": req.url,
-            "results": optimizations
+            "site_id": site_id,
+            "results": optimize_results
         }).execute()
 
-        # 4. Build final response
+        # 4️⃣ Insert into scores
+        supabase.table("scores").insert({
+            "site_id": site_id,
+            "seo_score": score_results.get("seo_score"),
+            "ai_score": score_results.get("ai_score"),
+            "combined_score": score_results.get("combined_score"),
+            "results": score_results  # store full JSON
+        }).execute()
+
         return {
             "url": req.url,
-            "seo_score": scores.get("seo_score"),
-            "ai_score": scores.get("ai_score"),
-            "combined_score": scores.get("combined_score"),
-            "pages_evaluated": scores.get("pages_evaluated"),
-            "audit": audit_result,
-            "optimizations": optimizations.get("suggestions", []),
+            "audit": audit_results,
+            "score": score_results,
+            "optimize": optimize_results
         }
 
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "Process failed", "details": str(e)}
 

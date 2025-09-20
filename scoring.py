@@ -105,7 +105,6 @@ def _tld_country(url: str) -> str:
         return ""
 
 def _location_present(page: Dict[str, Any]) -> Tuple[bool, str, str]:
-    # returns (has_geo, city, country)
     title = _title(page)
     desc  = _meta_desc(page)
     kwstr = " ".join(_keywords(page))
@@ -236,35 +235,47 @@ def _score_single_page(page: Dict[str, Any], audit: Dict[str, Any]) -> Tuple[int
 
 # --------------- site-level scoring (weighted) ---------------
 def score_website(audit: Dict[str, Any], detail: bool = False) -> Dict[str, Any]:
+    """Takes a full audit dict (with pages[]) and returns aggregated SEO + AI scores."""
+    if not isinstance(audit, dict):
+        return {"error": "Invalid audit: expected dict"}
+
     pages: List[Dict[str, Any]] = audit.get("pages") or []
-    if not pages: pages = [audit]
+    if not pages:
+        if "url" in audit:  # single page fallback
+            pages = [audit]
+        else:
+            return {"error": "Audit has no pages"}
 
     total_wc = 0
     weighted_seo = 0.0
-    weighted_ai  = 0.0
+    weighted_ai = 0.0
     seo_task_counter = Counter()
-    ai_task_counter  = Counter()
+    ai_task_counter = Counter()
     pages_details: List[Dict[str, Any]] = []
     langs = Counter()
     cities = Counter()
     countries = Counter()
 
     for page in pages:
-        seo, ai, seo_tasks, ai_tasks, meta = _score_single_page(page, audit)
+        try:
+            seo, ai, seo_tasks, ai_tasks, meta = _score_single_page(page, audit)
+        except Exception:
+            continue
+
         wc = _word_count(page)
         w = wc if wc > 0 else 1
         total_wc += w
         weighted_seo += seo * w
-        weighted_ai  += ai * w
+        weighted_ai += ai * w
         for t in seo_tasks: seo_task_counter[t] += 1
-        for t in ai_tasks:  ai_task_counter[t]  += 1
+        for t in ai_tasks: ai_task_counter[t] += 1
         if meta["language"]: langs[meta["language"]] += 1
-        if meta["city"]:     cities[meta["city"]]     += 1
-        if meta["country"]:  countries[meta["country"]] += 1
+        if meta["city"]: cities[meta["city"]] += 1
+        if meta["country"]: countries[meta["country"]] += 1
 
         if detail:
             pages_details.append({
-                "url": page.get("url",""),
+                "url": page.get("url", ""),
                 "title": _title(page),
                 "word_count": wc,
                 "seo_score_page": seo,
@@ -276,13 +287,15 @@ def score_website(audit: Dict[str, Any], detail: bool = False) -> Dict[str, Any]
                 "top_ai_tasks": ai_tasks[:3],
             })
 
-    if total_wc == 0: total_wc = len(pages)
+    if total_wc == 0:
+        total_wc = len(pages) or 1
+
     seo_score = int(round(weighted_seo / total_wc))
-    ai_score  = int(round(weighted_ai  / total_wc))
-    combined  = int(round((seo_score + ai_score) / 2))
+    ai_score = int(round(weighted_ai / total_wc))
+    combined = int(round((seo_score + ai_score) / 2))
 
     top_seo_tasks = [f"{t} (x{c})" for t, c in seo_task_counter.most_common(25)]
-    top_ai_tasks  = [f"{t} (x{c})" for t, c in ai_task_counter.most_common(25)]
+    top_ai_tasks = [f"{t} (x{c})" for t, c in ai_task_counter.most_common(25)]
 
     result = {
         "seo_score": seo_score,

@@ -129,18 +129,24 @@ async def process(req: AuditRequest):
 
         # Run score (handle dict vs string)
         score_raw = score_website(req.url)
+
+        # Try to normalize
         if isinstance(score_raw, str):
             try:
-                score_results = json.loads(score_raw)   # JSON string
+                score_results = json.loads(score_raw)   # parse JSON string
             except Exception:
-                score_results = {"raw_score": score_raw}  # plain string
+                score_results = {"raw_score": score_raw}  # wrap plain string
         else:
             score_results = score_raw  # already dict
 
-        # Extract values safely
-        seo_score = score_results.get("seo_score") if isinstance(score_results, dict) else None
-        ai_score = score_results.get("ai_score") if isinstance(score_results, dict) else None
-        combined_score = score_results.get("combined_score") if isinstance(score_results, dict) else None
+        # Extract scores safely (only if dict has them)
+        seo_score = None
+        ai_score = None
+        combined_score = None
+        if isinstance(score_results, dict):
+            seo_score = score_results.get("seo_score")
+            ai_score = score_results.get("ai_score")
+            combined_score = score_results.get("combined_score")
 
         # Run optimization
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
@@ -168,7 +174,7 @@ async def process(req: AuditRequest):
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results
+            "results": score_results  # always store full raw/dict
         }).execute()
 
         return {

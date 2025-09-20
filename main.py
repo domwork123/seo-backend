@@ -127,9 +127,13 @@ async def process(req: AuditRequest):
         # Run audit
         audit_results = analyze(req.url)
 
-        # Run score
-        score_raw = score_website(req.url)
-        print("DEBUG: score_raw (raw return) =", score_raw, type(score_raw))
+        # Run score safely
+        try:
+            score_raw = score_website(req.url)
+            print("DEBUG: score_raw (raw return) =", score_raw, type(score_raw))
+        except Exception as err:
+            print("DEBUG: score_website crashed:", err)
+            score_raw = {"raw_score": f"error: {str(err)}"}
 
         # Force normalize to dict
         score_results = {}

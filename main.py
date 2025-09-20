@@ -122,7 +122,7 @@ async def optimize_post(
 @app.post("/process")
 async def process(req: AuditRequest):
     try:
-        # 👇 Add this line
+        # Debug marker to confirm new code is live
         print("DEBUG: NEW PROCESS DEPLOYED")
 
         # Run audit
@@ -130,6 +130,7 @@ async def process(req: AuditRequest):
 
         # Run score (handle dict vs string safely)
         score_raw = score_website(req.url)
+        print("DEBUG: score_raw =", score_raw, type(score_raw))
 
         if isinstance(score_raw, str):
             try:
@@ -173,7 +174,7 @@ async def process(req: AuditRequest):
             "seo_score": seo_score,
             "ai_score": ai_score,
             "combined_score": combined_score,
-            "results": score_results
+            "results": score_results  # always store full raw/dict
         }).execute()
 
         return {

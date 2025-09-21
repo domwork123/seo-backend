@@ -22,7 +22,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://*.lovable.app",   # Lovable preview links
+        "https://preview--ascentiq-pro.lovable.app",   # Lovable preview links
         "https://*.lovable.dev",   # Lovable dev links
         "https://tryevika.com",    # your live site
         "http://localhost:3000",   # local dev testing

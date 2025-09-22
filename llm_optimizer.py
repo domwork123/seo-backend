@@ -42,44 +42,72 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             pages = []
         pages = [p for p in pages if isinstance(p, dict)]
         
-        # Filter out sitemap URLs and other non-content pages
+        # PROFESSIONAL-GRADE CONTENT FILTERING
         content_pages = []
+        skipped_count = 0
+        
         for page in pages:
             url = page.get('url', '')
             
-            # Skip sitemap URLs, robots.txt, and other non-content pages
-            skip_patterns = ['sitemap', 'robots.txt', '.xml', 'feed', 'rss', 'atom', 'sitemap.xml']
-            if any(skip in url.lower() for skip in skip_patterns):
-                print(f"DEBUG: Skipping sitemap/technical file: {url}")
+            # COMPREHENSIVE TECHNICAL FILE FILTERING
+            technical_patterns = [
+                'sitemap', 'robots.txt', '.xml', 'feed', 'rss', 'atom', 
+                'sitemap.xml', 'post-sitemap', 'page-sitemap', 'tag-sitemap',
+                'category-sitemap', 'product-sitemap', 'job-sitemap',
+                'news-sitemap', 'image-sitemap', 'video-sitemap'
+            ]
+            
+            # Check if URL contains any technical patterns
+            is_technical_file = any(pattern in url.lower() for pattern in technical_patterns)
+            
+            # Check if URL ends with technical extensions
+            technical_extensions = ['.xml', '.txt', '.rss', '.atom']
+            has_technical_extension = any(url.lower().endswith(ext) for ext in technical_extensions)
+            
+            # Skip all technical files
+            if is_technical_file or has_technical_extension:
+                skipped_count += 1
+                print(f"DEBUG: SKIPPING technical file: {url}")
                 continue
             
-            # Skip pages that are clearly not content pages
-            if url.endswith('.xml') or 'sitemap' in url.lower():
-                print(f"DEBUG: Skipping XML/sitemap file: {url}")
-                continue
-            
-            # Only include pages with some content (more lenient filtering)
+            # CONTENT VALIDATION - Only include pages with substantial content
             has_title = bool(page.get('title', '').strip())
             has_meta = bool(page.get('meta', '').strip())
             has_h1 = bool(page.get('h1', []))
-            has_content = page.get('word_count', 0) > 20  # Reduced from 50 to 20 words
+            has_h2 = bool(page.get('h2', []))
+            has_content = page.get('word_count', 0) > 50  # Increased back to 50 words
             
-            # Must have at least 1 of: title, meta, h1, or some content
-            content_score = sum([has_title, has_meta, has_h1, has_content])
+            # Must have substantial content (at least 2 of: title, meta, h1, h2, or 50+ words)
+            content_score = sum([has_title, has_meta, has_h1, has_h2, has_content])
             
-            # Additional check: ensure it's a real content page, not a technical file
-            is_content_page = (
-                has_title or has_meta or has_h1 or has_content
-            ) and not url.endswith('.xml') and 'sitemap' not in url.lower()
-            
-            if is_content_page and content_score >= 1:
+            # Only include pages with meaningful content
+            if content_score >= 2:
                 content_pages.append(page)
-                print(f"DEBUG: Including page {url} (content score: {content_score})")
+                print(f"DEBUG: INCLUDING content page: {url} (score: {content_score})")
             else:
-                print(f"DEBUG: Skipping page {url} (content score: {content_score} - insufficient content or technical file)")
+                skipped_count += 1
+                print(f"DEBUG: SKIPPING low-content page: {url} (score: {content_score})")
+        
+        print(f"DEBUG: FILTERING COMPLETE - {len(content_pages)} content pages, {skipped_count} pages skipped")
         
         pages = content_pages
-        print(f"DEBUG: Filtered to {len(pages)} content pages with substantial content")
+        
+        # FINAL SAFETY CHECK - Remove any remaining sitemap URLs
+        final_pages = []
+        for page in pages:
+            url = page.get('url', '')
+            if 'sitemap' not in url.lower() and not url.endswith('.xml'):
+                final_pages.append(page)
+            else:
+                print(f"DEBUG: FINAL SAFETY - Removing sitemap URL: {url}")
+        
+        pages = final_pages
+        print(f"DEBUG: FINAL RESULT - {len(pages)} content pages ready for optimization")
+        
+        # If no content pages found, return base optimizations
+        if len(pages) == 0:
+            print("DEBUG: No content pages found - returning base optimizations only")
+            return base_optimizations
         
         # Ensure languages is a list
         if not isinstance(languages, list):

@@ -18,7 +18,12 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
     try:
         # Get base optimizations first
         print("DEBUG: Getting base optimizations...")
-        base_optimizations = optimize_site(audit_data, scores)
+        print(f"DEBUG: audit_data type: {type(audit_data)}")
+        print(f"DEBUG: scores type: {type(scores)}")
+        print(f"DEBUG: audit_data keys: {list(audit_data.keys()) if isinstance(audit_data, dict) else 'Not a dict'}")
+        print(f"DEBUG: scores keys: {list(scores.keys()) if isinstance(scores, dict) else 'Not a dict'}")
+        
+        base_optimizations = optimize_site(audit_data)
         print("DEBUG: Base optimizations obtained successfully")
         
         # Check if OpenAI is available

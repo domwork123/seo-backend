@@ -3,6 +3,7 @@ import os
 import json
 from typing import Dict, Any, List
 from optimizer import optimize_site
+from llm_ruleset import get_optimization_guidelines, detect_industry_from_content, prioritize_recommendations
 
 # Initialize OpenAI client
 try:
@@ -48,12 +49,23 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             # Skip sitemap URLs, robots.txt, and other non-content pages
             if any(skip in url.lower() for skip in ['sitemap', 'robots.txt', '.xml', 'feed', 'rss']):
                 continue
-            # Only include pages with actual content (title, meta, or h1)
-            if page.get('title') or page.get('meta') or page.get('h1'):
+            
+            # Only include pages with substantial content
+            has_title = bool(page.get('title', '').strip())
+            has_meta = bool(page.get('meta', '').strip())
+            has_h1 = bool(page.get('h1', []))
+            has_content = page.get('word_count', 0) > 50  # At least 50 words
+            
+            # Must have at least 2 of: title, meta, h1, or substantial content
+            content_score = sum([has_title, has_meta, has_h1, has_content])
+            if content_score >= 2:
                 content_pages.append(page)
+                print(f"DEBUG: Including page {url} (content score: {content_score})")
+            else:
+                print(f"DEBUG: Skipping page {url} (content score: {content_score} - insufficient content)")
         
         pages = content_pages
-        print(f"DEBUG: Filtered to {len(pages)} content pages (excluding sitemaps)")
+        print(f"DEBUG: Filtered to {len(pages)} content pages with substantial content")
         
         # Ensure languages is a list
         if not isinstance(languages, list):
@@ -94,9 +106,31 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             total_images = sum(len(p.get('images', [])) for p in pages if isinstance(p, dict))
             print(f"DEBUG: Total images: {total_images}")
             
+            # Detect industry and get comprehensive optimization guidelines
+            industry = detect_industry_from_content(audit_data)
+            guidelines = get_optimization_guidelines(industry, "technical", "safe")
+            print(f"DEBUG: Detected industry: {industry}")
+            print(f"DEBUG: Using guidelines for: {industry}")
+            
+            # Build detailed page content for LLM analysis
+            page_details = []
+            for page in pages[:5]:  # Limit to first 5 pages to avoid token limits
+                page_info = {
+                    'url': page.get('url', ''),
+                    'title': page.get('title', ''),
+                    'meta': page.get('meta', ''),
+                    'h1': page.get('h1', []),
+                    'h2': page.get('h2', []),
+                    'word_count': page.get('word_count', 0),
+                    'lang': page.get('lang', ''),
+                    'images_count': len(page.get('images', []))
+                }
+                page_details.append(page_info)
+            
             prompt = f"""
-You are an expert SEO and content optimization specialist. Analyze this website audit data and provide enhanced, actionable optimizations.
+You are an expert SEO and content optimization specialist following comprehensive professional guidelines. Analyze this website audit data and provide enhanced, actionable optimizations.
 
+WEBSITE ANALYSIS:
 Website: {site_url}
 Languages: {languages_str}
 Content pages analyzed: {len(pages)} (excluding sitemaps and technical files)
@@ -104,16 +138,41 @@ SEO Score: {scores_data.get('seo', 0)}/100
 AEO Score: {scores_data.get('aeo', 0)}/100
 Overall Score: {scores_data.get('overall', 0)}/100
 
-Current issues found:
+DETECTED INDUSTRY: {industry}
+OPTIMIZATION GUIDELINES: {guidelines['industry_template']}
+
+CURRENT ISSUES FOUND:
 - {missing_titles} pages missing titles
 - {missing_meta} pages missing meta descriptions
 - {missing_h1} pages missing H1 tags
 - {total_images} total images, many missing ALT text
 
-IMPORTANT: Only provide optimizations for actual content pages (homepage, product pages, blog posts, etc.). 
-Do NOT provide optimizations for sitemap URLs, robots.txt, or other technical files.
+ACTUAL PAGE CONTENT TO ANALYZE:
+{page_details}
 
-For each content page that needs optimization, provide:
+PROFESSIONAL OPTIMIZATION RULES:
+1. COVER ALL CORE CATEGORIES: SEO, AEO, GEO, Accessibility, Technical, Performance, UX, Conversions, Content
+2. FOLLOW INDUSTRY-SPECIFIC TEMPLATES: {guidelines['industry_template']}
+3. PRIORITIZE HIGH-IMPACT, LOW-EFFORT OPTIMIZATIONS FIRST
+4. ENSURE COMPLIANCE WITH: Google Search Essentials, WCAG 2.1, Core Web Vitals, Schema.org
+5. BASE RECOMMENDATIONS ON ACTUAL CONTENT, NOT URL PATTERNS
+6. ONLY OPTIMIZE PAGES WITH SUBSTANTIAL CONTENT (title, meta, H1, or 50+ words)
+7. FOLLOW E-E-A-T PRINCIPLES (Experience, Expertise, Authoritativeness, Trustworthiness)
+8. IMPLEMENT STRUCTURED DATA APPROPRIATELY
+9. FOCUS ON USER INTENT AND PEOPLE-FIRST CONTENT
+10. PROVIDE ACTIONABLE, SPECIFIC RECOMMENDATIONS
+
+CRITICAL INSTRUCTIONS:
+- ONLY analyze pages that actually exist and have content
+- Base optimizations on ACTUAL content, not URL patterns
+- If a page has no title, meta, or H1, it likely doesn't exist - SKIP IT
+- Analyze real content to understand what the page is about
+- Do NOT make assumptions based on URL keywords
+- Only provide optimizations for pages with actual, relevant content
+- Follow industry-specific templates and guidelines
+- Prioritize recommendations by impact/effort matrix
+
+For each REAL content page that needs optimization, provide:
 1. Enhanced title (50-60 chars, keyword-rich, compelling)
 2. Meta description (150-160 chars, action-oriented)
 3. H1 tag (clear, keyword-focused)

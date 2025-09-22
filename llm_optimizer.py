@@ -1,12 +1,15 @@
 # llm_optimizer.py — LLM-powered optimization using OpenAI
 import os
 import json
-import openai
 from typing import Dict, Any, List
 from optimizer import optimize_site
 
 # Initialize OpenAI client
-openai.api_key = os.getenv("LLM_API_KEY")
+try:
+    import openai
+    openai.api_key = os.getenv("LLM_API_KEY")
+except ImportError:
+    openai = None
 
 async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -15,6 +18,11 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
     try:
         # Get base optimizations first
         base_optimizations = optimize_site(audit_data, scores)
+        
+        # Check if OpenAI is available
+        if not openai:
+            print("OpenAI not available, using base optimizations")
+            return base_optimizations
         
         # Extract key information for LLM
         site_url = audit_data.get("url", "")
@@ -91,7 +99,7 @@ Make all content production-ready and copy-pasteable.
 """
 
         # Call OpenAI API
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an expert SEO specialist. Provide actionable, production-ready optimizations in valid JSON format."},

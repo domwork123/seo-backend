@@ -58,14 +58,27 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         
         # Create LLM prompt with error handling
         try:
+            print("DEBUG: Starting LLM prompt generation...")
             # Safe string operations
             languages_str = ', '.join(str(l) for l in languages) if languages else 'Unknown'
+            print(f"DEBUG: Languages processed: {languages_str}")
             
             # Count issues safely
+            print("DEBUG: Counting missing titles...")
             missing_titles = len([p for p in pages if isinstance(p, dict) and not p.get('title')])
+            print(f"DEBUG: Missing titles: {missing_titles}")
+            
+            print("DEBUG: Counting missing meta...")
             missing_meta = len([p for p in pages if isinstance(p, dict) and not p.get('meta')])
+            print(f"DEBUG: Missing meta: {missing_meta}")
+            
+            print("DEBUG: Counting missing H1...")
             missing_h1 = len([p for p in pages if isinstance(p, dict) and not p.get('h1')])
+            print(f"DEBUG: Missing H1: {missing_h1}")
+            
+            print("DEBUG: Counting total images...")
             total_images = sum(len(p.get('images', [])) for p in pages if isinstance(p, dict))
+            print(f"DEBUG: Total images: {total_images}")
             
             prompt = f"""
 You are an expert SEO and content optimization specialist. Analyze this website audit data and provide enhanced, actionable optimizations.

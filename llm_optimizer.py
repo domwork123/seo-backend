@@ -30,13 +30,14 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         languages = audit_data.get("languages", [])
         
         # Build context for LLM
+        scores_data = scores.get("scores", {})
         context = {
             "site_url": site_url,
             "languages": languages,
             "pages_count": len(pages),
-            "seo_score": scores.get("seo_score", 0),
-            "aeo_score": scores.get("aeo_score", 0),
-            "overall_score": scores.get("overall", 0)
+            "seo_score": scores_data.get("seo", 0),
+            "aeo_score": scores_data.get("aeo", 0),
+            "overall_score": scores_data.get("overall", 0)
         }
         
         # Create LLM prompt
@@ -46,9 +47,9 @@ You are an expert SEO and content optimization specialist. Analyze this website 
 Website: {site_url}
 Languages: {', '.join(languages)}
 Pages analyzed: {len(pages)}
-SEO Score: {scores.get('seo_score', 0)}/100
-AEO Score: {scores.get('aeo_score', 0)}/100
-Overall Score: {scores.get('overall', 0)}/100
+SEO Score: {scores_data.get('seo', 0)}/100
+AEO Score: {scores_data.get('aeo', 0)}/100
+Overall Score: {scores_data.get('overall', 0)}/100
 
 Current issues found:
 - {len([p for p in pages if not p.get('title')])} pages missing titles

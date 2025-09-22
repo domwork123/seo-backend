@@ -14,7 +14,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 from scoring import score_website
 from optimizer import optimize_site
-from pyseoanalyzer import analyze
+from audit import analyze
+
 
 app = FastAPI()
 

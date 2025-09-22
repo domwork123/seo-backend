@@ -24,9 +24,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://preview--ascentiq-pro.lovable.app",   # Lovable preview links
+        "https://ascentiq-pro.lovable.app",           # Lovable production
         "https://*.lovable.dev",   # Lovable dev links
         "https://tryevika.com",    # your live site
         "http://localhost:3000",   # local dev testing
+        "http://127.0.0.1:3000"    # local dev testing
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -214,4 +216,14 @@ async def process(req: AuditRequest):
         
     except Exception as e:
         return {"error": "Process failed", "details": str(e)}
+
+# ---------- /version ----------
+@app.get("/version")
+async def version():
+    return {"version": "1.0.0", "status": "active"}
+
+# ---------- /health ----------
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
 

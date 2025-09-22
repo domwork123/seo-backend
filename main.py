@@ -61,10 +61,10 @@ async def audit(req: AuditRequest = Body(...), max_pages: int = Query(50, ge=1, 
 
     # (optional) persist to Supabase
     try:
-    supabase.table("audits").insert({
-        "url": url,
-        "results": result
-    }).execute()
+        supabase.table("audits").insert({
+            "url": url,
+            "results": result
+        }).execute()
     except Exception:
         # Allow running without Supabase configured
         pass
@@ -92,13 +92,13 @@ async def score_bulk(
 
             # Save scores to Supabase ✅
             try:
-            supabase.table("scores").insert({
-                "url": u,
-                "seo_score": scores.get("seo_score"),
-                "ai_score": scores.get("ai_score"),
-                "combined_score": scores.get("combined_score"),
-                "details": scores  # put full JSON into details column
-            }).execute()
+                supabase.table("scores").insert({
+                    "url": u,
+                    "seo_score": scores.get("seo_score"),
+                    "ai_score": scores.get("ai_score"),
+                    "combined_score": scores.get("combined_score"),
+                    "details": scores  # put full JSON into details column
+                }).execute()
             except Exception:
                 pass
 
@@ -135,10 +135,10 @@ async def optimize_post(
 
         # Save optimizations to Supabase ✅
         try:
-        supabase.table("optimizations").insert({
-            "url": url,
-            "results": out
-        }).execute()
+            supabase.table("optimizations").insert({
+                "url": url,
+                "results": out
+            }).execute()
         except Exception:
             pass
 
@@ -167,40 +167,40 @@ async def process(req: AuditRequest):
         # 4️⃣ Insert into sites (once)
         site_id = None
         try:
-        site_insert = supabase.table("sites").insert({"url": req.url}).execute()
+            site_insert = supabase.table("sites").insert({"url": req.url}).execute()
             site_id = site_insert.data[0]["id"] if getattr(site_insert, "data", None) else None
         except Exception:
             pass
          
         # 5️⃣ Insert into audits
         try:
-        supabase.table("audits").insert({
-            "site_id": site_id,
-            "url": req.url,
-            "results": audit_results
-        }).execute()
+            supabase.table("audits").insert({
+                "site_id": site_id,
+                "url": req.url,
+                "results": audit_results
+            }).execute()
         except Exception:
             pass
         
         # 6️⃣ Insert into optimizations
         try:
-        supabase.table("optimizations").insert({
-            "site_id": site_id,
-            "url": req.url,
-            "results": optimize_results
-        }).execute()
+            supabase.table("optimizations").insert({
+                "site_id": site_id,
+                "url": req.url,
+                "results": optimize_results
+            }).execute()
         except Exception:
             pass
         
         # 7️⃣ Insert into scores
         try:
-        supabase.table("scores").insert({
-            "site_id": site_id,
-            "seo_score": seo_score,
-            "ai_score": ai_score,
-            "combined_score": combined_score,
-            "results": score_results
-        }).execute()
+            supabase.table("scores").insert({
+                "site_id": site_id,
+                "seo_score": seo_score,
+                "ai_score": ai_score,
+                "combined_score": combined_score,
+                "results": score_results
+            }).execute()
         except Exception:
             pass
         

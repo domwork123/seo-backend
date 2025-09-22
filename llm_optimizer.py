@@ -50,15 +50,15 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             if any(skip in url.lower() for skip in ['sitemap', 'robots.txt', '.xml', 'feed', 'rss']):
                 continue
             
-            # Only include pages with substantial content
+            # Only include pages with some content (more lenient filtering)
             has_title = bool(page.get('title', '').strip())
             has_meta = bool(page.get('meta', '').strip())
             has_h1 = bool(page.get('h1', []))
-            has_content = page.get('word_count', 0) > 50  # At least 50 words
+            has_content = page.get('word_count', 0) > 20  # Reduced from 50 to 20 words
             
-            # Must have at least 2 of: title, meta, h1, or substantial content
+            # Must have at least 1 of: title, meta, h1, or some content
             content_score = sum([has_title, has_meta, has_h1, has_content])
-            if content_score >= 2:
+            if content_score >= 1:
                 content_pages.append(page)
                 print(f"DEBUG: Including page {url} (content score: {content_score})")
             else:
@@ -114,7 +114,7 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             
             # Build detailed page content for LLM analysis
             page_details = []
-            for page in pages[:5]:  # Limit to first 5 pages to avoid token limits
+            for page in pages[:10]:  # Increased to 10 pages for more comprehensive analysis
                 page_info = {
                     'url': page.get('url', ''),
                     'title': page.get('title', ''),
@@ -178,6 +178,9 @@ For each REAL content page that needs optimization, provide:
 3. H1 tag (clear, keyword-focused)
 4. FAQ section (3-5 relevant questions with detailed answers)
 5. JSON-LD schema (Organization, LocalBusiness, or Product as appropriate)
+
+IMPORTANT: Provide optimizations for ALL pages that have content. Do not limit to just one page. 
+Each page should get its own optimization section with the page URL clearly identified.
 6. ALT text suggestions for images missing them
 
 Focus on:

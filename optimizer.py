@@ -118,6 +118,49 @@ def _detect_lang_from_text(text: str) -> str:
     except Exception:
         return ""
 
+def _filename_from_src(src: str) -> str:
+    try:
+        tail = src.split("?")[0].split("#")[0].rsplit("/", 1)[-1]
+        name = tail.rsplit(".", 1)[0]
+        name = name.replace("-", " ").replace("_", " ")
+        return name.strip()
+    except Exception:
+        return ""
+
+def _suggest_alt_text(img: Dict[str, Any], primary_kw: str, brand: str, page_h1: str) -> str:
+    base = _filename_from_src(str(img.get("src") or ""))
+    key = primary_kw or page_h1 or base
+    key = key.strip()
+    if not key:
+        return "Descriptive image of the page topic."
+    # Compose concise, readable ALT (ASCII-only kept by not adding special chars)
+    if brand and brand.lower() not in key.lower():
+        return _shorten_ascii(f"{key} | {brand}", 100)
+    return _shorten_ascii(key, 100)
+
+def _needs_slug_improvement(url: str) -> bool:
+    try:
+        path = url.split("://", 1)[-1].split("/", 1)[-1]
+        seg = path.strip("/").split("/")[-1]
+        if not seg:
+            return False
+        # Heuristics: very long, contains query-like tokens, or numeric gibberish
+        if len(seg) > 60:
+            return True
+        if any(tok in seg for tok in ["?", "&", "=", ","]):
+            return True
+        if sum(ch.isdigit() for ch in seg) > max(6, len(seg) // 3):
+            return True
+        return False
+    except Exception:
+        return False
+
+def _slugify(text: str) -> str:
+    s = re.sub(r"[^A-Za-z0-9\-\s]", "", text.strip())
+    s = re.sub(r"\s+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-").lower()
+    return s
+
 # ---------- language prompts for FAQ (very small built-in map) ----------
 FAQ_PROMPTS = {
     "en": ("What is {x}?", "How much does {x} cost?"),
@@ -213,6 +256,56 @@ def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -
             ],
         }
 
+        # ALT text suggestions for images without alt
+        images = p.get("images") or []
+        alt_suggestions: List[Dict[str, str]] = []
+        for img in images:
+            if not (img.get("alt") or "").strip():
+                suggestion = _suggest_alt_text(img, primary_kw, brand, new_h1)
+                alt_suggestions.append({
+                    "src": str(img.get("src") or ""),
+                    "suggested_alt": suggestion
+                })
+
+        # LocalBusiness schema if NAP hints present
+        nap = p.get("nap") or {}
+        phone = nap.get("phone") or ""
+        address = nap.get("address") or ""
+        local_business_schema = None
+        if phone or address:
+            local_business_schema = {
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": brand or new_h1 or new_title,
+                "telephone": phone or "",
+                "address": {"@type": "PostalAddress", "streetAddress": address or ""},
+                "url": url,
+            }
+
+        # Product schema: heuristic trigger on URL/keywords
+        product_schema = None
+        blob = (" ".join(_keywords_norm(p)) + " " + (url or "")).lower()
+        if any(tok in blob for tok in ["/product", "/products", "product", "shop", "price"]):
+            product_schema = {
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": primary_kw or new_h1 or new_title,
+                "brand": brand or "",
+                "description": new_meta,
+                "offers": {
+                    "@type": "Offer",
+                    "priceCurrency": "EUR",
+                    "price": "0.00",
+                    "availability": "https://schema.org/InStock"
+                }
+            }
+
+        # Slug suggestion
+        slug_suggestion = None
+        if _needs_slug_improvement(url):
+            base_kw = primary_kw or new_h1 or new_title
+            slug_suggestion = _slugify(base_kw)[:80] if base_kw else None
+
         out.append({
             "url": url,
             "language": lang,
@@ -226,8 +319,19 @@ def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -
                 "new_h1": new_h1,
                 "faq": faq,
                 "faq_schema_jsonld": json.dumps(faq_schema, ensure_ascii=False, indent=2),
+                "local_business_schema_jsonld": json.dumps(local_business_schema, ensure_ascii=False, indent=2) if local_business_schema else None,
+                "product_schema_jsonld": json.dumps(product_schema, ensure_ascii=False, indent=2) if product_schema else None,
+                "alt_text_suggestions": alt_suggestions,
+                "slug_suggestion": slug_suggestion,
             },
         })
 
-    return {"brand_guess": brand, "pages_optimized": out}
+    # Site-wide Organization schema
+    site_schema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": brand or "",
+    }
+
+    return {"brand_guess": brand, "site_schema_jsonld": json.dumps(site_schema, ensure_ascii=False, indent=2), "pages_optimized": out}
 

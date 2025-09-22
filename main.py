@@ -51,8 +51,8 @@ class OptimizeRequest(BaseModel):
 
 # ---------- /audit ----------
 @app.post("/audit")
-async def audit(req: dict = Body(...), max_pages: int = Query(50, ge=1, le=200)):
-    url = req.get("url")
+async def audit(req: AuditRequest = Body(...), max_pages: int = Query(50, ge=1, le=200)):
+    url = req.url
     if not url:
         return {"error": "Missing 'url'."}
 
@@ -60,10 +60,14 @@ async def audit(req: dict = Body(...), max_pages: int = Query(50, ge=1, le=200))
     result = await audit_site(url, max_pages=max_pages)
 
     # (optional) persist to Supabase
+    try:
     supabase.table("audits").insert({
         "url": url,
         "results": result
     }).execute()
+    except Exception:
+        # Allow running without Supabase configured
+        pass
 
     return result
 
@@ -77,7 +81,8 @@ async def score_bulk(
     output = []
     for u in payload.urls:
         try:
-            audit_result = await audit(AuditRequest(url=u))
+            # Run audit directly to avoid route-call mismatches
+            audit_result = await audit_site(u, max_pages=50)
             if "error" in audit_result:
                 output.append({"url": u, "error": audit_result["error"]})
                 continue
@@ -86,6 +91,7 @@ async def score_bulk(
             scores = score_website(data, detail=bool(detail))
 
             # Save scores to Supabase ✅
+            try:
             supabase.table("scores").insert({
                 "url": u,
                 "seo_score": scores.get("seo_score"),
@@ -93,6 +99,8 @@ async def score_bulk(
                 "combined_score": scores.get("combined_score"),
                 "details": scores  # put full JSON into details column
             }).execute()
+            except Exception:
+                pass
 
             output.append({"url": u, **scores})
         except Exception as e:
@@ -112,8 +120,8 @@ async def optimize_post(
             data = payload.audit
             url = payload.url or ""
         elif payload.url:
-            audit_result = await audit(AuditRequest(url=payload.url))
-            if "error" in audit_result:
+            audit_result = await audit_site(payload.url, max_pages=50)
+            if isinstance(audit_result, dict) and "error" in audit_result:
                 return JSONResponse(status_code=500, content=audit_result)
             data = audit_result.get("data", audit_result)
             url = payload.url
@@ -126,10 +134,13 @@ async def optimize_post(
         out = optimize_site(data, limit=limit or payload.limit or 10, detail=True)
 
         # Save optimizations to Supabase ✅
+        try:
         supabase.table("optimizations").insert({
             "url": url,
             "results": out
         }).execute()
+        except Exception:
+            pass
 
         return {"url": url, **out}
     except Exception as e:
@@ -142,7 +153,7 @@ async def process(req: AuditRequest):
         print("DEBUG: NEW PROCESS DEPLOYED")
             
         # 1️⃣ Run audit
-        audit_results = analyze(req.url)
+        audit_results = await audit_site(req.url, max_pages=50)
         
         # 2️⃣ Run score correctly
         score_results = score_website(audit_results, detail=True)
@@ -154,24 +165,35 @@ async def process(req: AuditRequest):
         optimize_results = optimize_site(audit_results, limit=10, detail=True)
             
         # 4️⃣ Insert into sites (once)
+        site_id = None
+        try:
         site_insert = supabase.table("sites").insert({"url": req.url}).execute()
-        site_id = site_insert.data[0]["id"]
+            site_id = site_insert.data[0]["id"] if getattr(site_insert, "data", None) else None
+        except Exception:
+            pass
          
         # 5️⃣ Insert into audits
+        try:
         supabase.table("audits").insert({
             "site_id": site_id,
             "url": req.url,
             "results": audit_results
         }).execute()
+        except Exception:
+            pass
         
         # 6️⃣ Insert into optimizations
+        try:
         supabase.table("optimizations").insert({
             "site_id": site_id,
             "url": req.url,
             "results": optimize_results
         }).execute()
+        except Exception:
+            pass
         
         # 7️⃣ Insert into scores
+        try:
         supabase.table("scores").insert({
             "site_id": site_id,
             "seo_score": seo_score,
@@ -179,6 +201,8 @@ async def process(req: AuditRequest):
             "combined_score": combined_score,
             "results": score_results
         }).execute()
+        except Exception:
+            pass
         
         # 8️⃣ Return clean response
         return {

@@ -14,7 +14,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 from scoring import score_website
 from optimizer import optimize_site
-from audit import analyze
+from audit import audit_site
 
 
 app = FastAPI()
@@ -51,20 +51,21 @@ class OptimizeRequest(BaseModel):
 
 # ---------- /audit ----------
 @app.post("/audit")
-async def audit(req: AuditRequest):
-    try:
-        # Call pyseoanalyzer directly in Python
-        results = analyze(req.url)  # no extra args
+async def audit(req: dict = Body(...), max_pages: int = Query(50, ge=1, le=200)):
+    url = req.get("url")
+    if not url:
+        return {"error": "Missing 'url'."}
 
-        # Save audit to Supabase
-        supabase.table("audits").insert({
-            "url": req.url,
-            "results": results  # ✅ column name matches schema
-        }).execute()
+    # Full-site crawl (sitemap first, fallback to homepage links)
+    result = await audit_site(url, max_pages=max_pages)
 
-        return results
-    except Exception as e:
-        return {"error": str(e)}
+    # (optional) persist to Supabase
+    supabase.table("audits").insert({
+        "url": url,
+        "results": result
+    }).execute()
+
+    return result
 
 
 # ---------- /score-bulk ----------

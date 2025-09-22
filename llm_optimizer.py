@@ -24,13 +24,22 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             print("OpenAI not available, using base optimizations")
             return base_optimizations
         
-        # Extract key information for LLM
+        # Extract key information for LLM with safety checks
         site_url = audit_data.get("url", "")
         pages = audit_data.get("pages", [])
         languages = audit_data.get("languages", [])
         
-        # Build context for LLM
-        scores_data = scores.get("scores", {})
+        # Ensure pages is a list and filter out non-dict items
+        if not isinstance(pages, list):
+            pages = []
+        pages = [p for p in pages if isinstance(p, dict)]
+        
+        # Ensure languages is a list
+        if not isinstance(languages, list):
+            languages = []
+        
+        # Build context for LLM with safe access
+        scores_data = scores.get("scores", {}) if isinstance(scores, dict) else {}
         context = {
             "site_url": site_url,
             "languages": languages,
@@ -40,22 +49,32 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             "overall_score": scores_data.get("overall", 0)
         }
         
-        # Create LLM prompt
-        prompt = f"""
+        # Create LLM prompt with error handling
+        try:
+            # Safe string operations
+            languages_str = ', '.join(str(l) for l in languages) if languages else 'Unknown'
+            
+            # Count issues safely
+            missing_titles = len([p for p in pages if isinstance(p, dict) and not p.get('title')])
+            missing_meta = len([p for p in pages if isinstance(p, dict) and not p.get('meta')])
+            missing_h1 = len([p for p in pages if isinstance(p, dict) and not p.get('h1')])
+            total_images = sum(len(p.get('images', [])) for p in pages if isinstance(p, dict))
+            
+            prompt = f"""
 You are an expert SEO and content optimization specialist. Analyze this website audit data and provide enhanced, actionable optimizations.
 
 Website: {site_url}
-Languages: {', '.join(languages)}
+Languages: {languages_str}
 Pages analyzed: {len(pages)}
 SEO Score: {scores_data.get('seo', 0)}/100
 AEO Score: {scores_data.get('aeo', 0)}/100
 Overall Score: {scores_data.get('overall', 0)}/100
 
 Current issues found:
-- {len([p for p in pages if not p.get('title')])} pages missing titles
-- {len([p for p in pages if not p.get('meta')])} pages missing meta descriptions
-- {len([p for p in pages if not p.get('h1')])} pages missing H1 tags
-- {sum(len(p.get('images', [])) for p in pages)} total images, many missing ALT text
+- {missing_titles} pages missing titles
+- {missing_meta} pages missing meta descriptions
+- {missing_h1} pages missing H1 tags
+- {total_images} total images, many missing ALT text
 
 For each page that needs optimization, provide:
 1. Enhanced title (50-60 chars, keyword-rich, compelling)
@@ -98,6 +117,9 @@ Return as JSON with this structure:
 
 Make all content production-ready and copy-pasteable.
 """
+        except Exception as prompt_error:
+            print(f"Error generating prompt: {prompt_error}")
+            return base_optimizations
 
         # Call OpenAI API
         response = openai.chat.completions.create(

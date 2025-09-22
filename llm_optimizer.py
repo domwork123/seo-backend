@@ -36,10 +36,24 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         pages = audit_data.get("pages", [])
         languages = audit_data.get("languages", [])
         
-        # Ensure pages is a list and filter out non-dict items
-        if not isinstance(pages, list):
-            pages = []
-        pages = [p for p in pages if isinstance(p, dict)]
+            # Ensure pages is a list and filter out non-dict items and sitemap URLs
+            if not isinstance(pages, list):
+                pages = []
+            pages = [p for p in pages if isinstance(p, dict)]
+            
+            # Filter out sitemap URLs and other non-content pages
+            content_pages = []
+            for page in pages:
+                url = page.get('url', '')
+                # Skip sitemap URLs, robots.txt, and other non-content pages
+                if any(skip in url.lower() for skip in ['sitemap', 'robots.txt', '.xml', 'feed', 'rss']):
+                    continue
+                # Only include pages with actual content (title, meta, or h1)
+                if page.get('title') or page.get('meta') or page.get('h1'):
+                    content_pages.append(page)
+            
+            pages = content_pages
+            print(f"DEBUG: Filtered to {len(pages)} content pages (excluding sitemaps)")
         
         # Ensure languages is a list
         if not isinstance(languages, list):
@@ -85,7 +99,7 @@ You are an expert SEO and content optimization specialist. Analyze this website 
 
 Website: {site_url}
 Languages: {languages_str}
-Pages analyzed: {len(pages)}
+Content pages analyzed: {len(pages)} (excluding sitemaps and technical files)
 SEO Score: {scores_data.get('seo', 0)}/100
 AEO Score: {scores_data.get('aeo', 0)}/100
 Overall Score: {scores_data.get('overall', 0)}/100
@@ -96,7 +110,10 @@ Current issues found:
 - {missing_h1} pages missing H1 tags
 - {total_images} total images, many missing ALT text
 
-For each page that needs optimization, provide:
+IMPORTANT: Only provide optimizations for actual content pages (homepage, product pages, blog posts, etc.). 
+Do NOT provide optimizations for sitemap URLs, robots.txt, or other technical files.
+
+For each content page that needs optimization, provide:
 1. Enhanced title (50-60 chars, keyword-rich, compelling)
 2. Meta description (150-160 chars, action-oriented)
 3. H1 tag (clear, keyword-focused)

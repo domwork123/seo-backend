@@ -46,8 +46,16 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         content_pages = []
         for page in pages:
             url = page.get('url', '')
+            
             # Skip sitemap URLs, robots.txt, and other non-content pages
-            if any(skip in url.lower() for skip in ['sitemap', 'robots.txt', '.xml', 'feed', 'rss']):
+            skip_patterns = ['sitemap', 'robots.txt', '.xml', 'feed', 'rss', 'atom', 'sitemap.xml']
+            if any(skip in url.lower() for skip in skip_patterns):
+                print(f"DEBUG: Skipping sitemap/technical file: {url}")
+                continue
+            
+            # Skip pages that are clearly not content pages
+            if url.endswith('.xml') or 'sitemap' in url.lower():
+                print(f"DEBUG: Skipping XML/sitemap file: {url}")
                 continue
             
             # Only include pages with some content (more lenient filtering)
@@ -58,11 +66,17 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             
             # Must have at least 1 of: title, meta, h1, or some content
             content_score = sum([has_title, has_meta, has_h1, has_content])
-            if content_score >= 1:
+            
+            # Additional check: ensure it's a real content page, not a technical file
+            is_content_page = (
+                has_title or has_meta or has_h1 or has_content
+            ) and not url.endswith('.xml') and 'sitemap' not in url.lower()
+            
+            if is_content_page and content_score >= 1:
                 content_pages.append(page)
                 print(f"DEBUG: Including page {url} (content score: {content_score})")
             else:
-                print(f"DEBUG: Skipping page {url} (content score: {content_score} - insufficient content)")
+                print(f"DEBUG: Skipping page {url} (content score: {content_score} - insufficient content or technical file)")
         
         pages = content_pages
         print(f"DEBUG: Filtered to {len(pages)} content pages with substantial content")

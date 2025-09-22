@@ -31,10 +31,6 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             print("OpenAI not available, using base optimizations")
             return base_optimizations
         
-        # TEMPORARY: Skip LLM and return base optimizations to test
-        print("DEBUG: Temporarily skipping LLM, returning base optimizations")
-        return base_optimizations
-        
         # Extract key information for LLM with safety checks
         site_url = audit_data.get("url", "")
         pages = audit_data.get("pages", [])

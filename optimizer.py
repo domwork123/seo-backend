@@ -223,6 +223,8 @@ def _make_h1(primary_kw: str, title_like: str) -> str:
 
 def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -> Dict[str, Any]:
     pages = audit.get("pages") or [audit]
+    # Filter out non-dict pages and ensure all are dictionaries
+    pages = [p for p in pages if isinstance(p, dict)]
     pages_sorted = sorted(pages, key=lambda p: _wc(p), reverse=True)
     if limit and limit > 0:
         pages_sorted = pages_sorted[:limit]

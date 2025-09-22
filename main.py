@@ -230,7 +230,7 @@ async def health():
 
 # ---------- /optimize-llm ----------
 @app.post("/optimize-llm")
-async def optimize_llm(req: ProcessRequest = Body(...)):
+async def optimize_llm(req: AuditRequest = Body(...)):
     try:
         url = req.url
         if not url:

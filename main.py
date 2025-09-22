@@ -15,6 +15,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 from scoring import score_website
 from optimizer import optimize_site
 from audit import audit_site
+from llm_optimizer import optimize_with_llm
 
 
 app = FastAPI()
@@ -226,4 +227,64 @@ async def version():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
+
+# ---------- /optimize-llm ----------
+@app.post("/optimize-llm")
+async def optimize_llm(req: ProcessRequest = Body(...)):
+    try:
+        url = req.url
+        if not url:
+            return {"error": "Missing 'url'."}
+
+        # 1. Get audit data
+        audit_result = await audit_site(url, max_pages=50)
+        
+        # 2. Get base scores
+        scores = score_website(audit_result)
+        
+        # 3. Generate LLM-powered optimizations
+        llm_optimizations = await optimize_with_llm(audit_result, scores)
+        
+        return {
+            "url": url,
+            "audit": audit_result,
+            "scores": scores,
+            "optimize": llm_optimizations
+        }
+    except Exception as e:
+        return {"error": "LLM optimization failed", "details": str(e)}
+
+# ---------- /apply-wordpress ----------
+class WordPressApplyRequest(BaseModel):
+    url: str
+    wp_site_url: str
+    wp_username: str
+    wp_password: str
+    optimizations: Dict[str, Any]
+
+@app.post("/apply-wordpress")
+async def apply_wordpress(req: WordPressApplyRequest = Body(...)):
+    try:
+        from wordpress_apply import WordPressConfig, apply_to_wordpress
+        
+        # Create WordPress config
+        wp_config = WordPressConfig(
+            site_url=req.wp_site_url,
+            username=req.wp_username,
+            password=req.wp_password,
+            api_endpoint=req.wp_site_url.rstrip('/')
+        )
+        
+        # Apply optimizations
+        results = await apply_to_wordpress(wp_config, req.optimizations)
+        
+        return {
+            "success": results["success"],
+            "applied": results["applied"],
+            "failed": results["failed"],
+            "errors": results["errors"]
+        }
+        
+    except Exception as e:
+        return {"error": "WordPress apply failed", "details": str(e)}
 

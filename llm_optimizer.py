@@ -36,24 +36,24 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         pages = audit_data.get("pages", [])
         languages = audit_data.get("languages", [])
         
-            # Ensure pages is a list and filter out non-dict items and sitemap URLs
-            if not isinstance(pages, list):
-                pages = []
-            pages = [p for p in pages if isinstance(p, dict)]
-            
-            # Filter out sitemap URLs and other non-content pages
-            content_pages = []
-            for page in pages:
-                url = page.get('url', '')
-                # Skip sitemap URLs, robots.txt, and other non-content pages
-                if any(skip in url.lower() for skip in ['sitemap', 'robots.txt', '.xml', 'feed', 'rss']):
-                    continue
-                # Only include pages with actual content (title, meta, or h1)
-                if page.get('title') or page.get('meta') or page.get('h1'):
-                    content_pages.append(page)
-            
-            pages = content_pages
-            print(f"DEBUG: Filtered to {len(pages)} content pages (excluding sitemaps)")
+        # Ensure pages is a list and filter out non-dict items and sitemap URLs
+        if not isinstance(pages, list):
+            pages = []
+        pages = [p for p in pages if isinstance(p, dict)]
+        
+        # Filter out sitemap URLs and other non-content pages
+        content_pages = []
+        for page in pages:
+            url = page.get('url', '')
+            # Skip sitemap URLs, robots.txt, and other non-content pages
+            if any(skip in url.lower() for skip in ['sitemap', 'robots.txt', '.xml', 'feed', 'rss']):
+                continue
+            # Only include pages with actual content (title, meta, or h1)
+            if page.get('title') or page.get('meta') or page.get('h1'):
+                content_pages.append(page)
+        
+        pages = content_pages
+        print(f"DEBUG: Filtered to {len(pages)} content pages (excluding sitemaps)")
         
         # Ensure languages is a list
         if not isinstance(languages, list):

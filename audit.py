@@ -406,37 +406,55 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
             if not content_pages and len(pages) > 0:
                 print(f"DEBUG: No content pages found, only technical files. Adding main domain as fallback.")
                 # Extract main domain from seed URL
-                from urllib.parse import urlparse
                 parsed = urlparse(seed_url)
                 main_domain = f"{parsed.scheme}://{parsed.netloc}/"
                 
                 # Add main domain as a content page if it's different from seed
                 if main_domain != seed_url:
-                    main_page = {
-                        "url": main_domain,
-                        "status": 200,
-                        "title": "",
-                        "meta": "",
-                        "h1": [],
-                        "h2": [],
-                        "h3": [],
-                        "lang": "en",
-                        "canonical": main_domain,
-                        "meta_robots": None,
-                        "x_robots_tag": None,
-                        "hreflang": [],
-                        "images": [],
-                        "links": {"internal": [], "external": [], "broken_internal": []},
-                        "schema": {"json_ld": [], "microdata": [], "opengraph": [], "rdfa": []},
-                        "faq": [],
-                        "nap": {"phone": "", "address": ""},
-                        "a11y": {"images_missing_alt": 0},
-                        "performance_hints": {"html_bytes": 0, "images_total_bytes_sampled": 0, "images_with_lazy": 0, "images_missing_dimensions": 0},
-                        "word_count": 0,
-                        "headers": {}
-                    }
-                    pages.insert(0, main_page)  # Add at the beginning
-                    discovered += 1
+                    print(f"DEBUG: Attempting to fetch main domain: {main_domain}")
+                    try:
+                        # Actually fetch the main domain page
+                        main_resp = await _fetch(client, main_domain)
+                        if main_resp and main_resp.status_code == 200:
+                            print(f"DEBUG: Successfully fetched main domain content")
+                            # Parse the main domain page content
+                            main_page = await _parse_page(client, main_domain, main_resp, robots, site_links, broken_site_links, discovered)
+                            if main_page:
+                                pages.insert(0, main_page)  # Add at the beginning
+                                discovered += 1
+                                print(f"DEBUG: Added main domain page with content")
+                            else:
+                                print(f"DEBUG: Failed to parse main domain page")
+                        else:
+                            print(f"DEBUG: Failed to fetch main domain, status: {main_resp.status_code if main_resp else 'No response'}")
+                    except Exception as fetch_error:
+                        print(f"DEBUG: Error fetching main domain: {fetch_error}")
+                        # Fallback to empty page if fetch fails
+                        main_page = {
+                            "url": main_domain,
+                            "status": 200,
+                            "title": "",
+                            "meta": "",
+                            "h1": [],
+                            "h2": [],
+                            "h3": [],
+                            "lang": "en",
+                            "canonical": main_domain,
+                            "meta_robots": None,
+                            "x_robots_tag": None,
+                            "hreflang": [],
+                            "images": [],
+                            "links": {"internal": [], "external": [], "broken_internal": []},
+                            "schema": {"json_ld": [], "microdata": [], "opengraph": [], "rdfa": []},
+                            "faq": [],
+                            "nap": {"phone": "", "address": ""},
+                            "a11y": {"images_missing_alt": 0},
+                            "performance_hints": {"html_bytes": 0, "images_total_bytes_sampled": 0, "images_with_lazy": 0, "images_missing_dimensions": 0},
+                            "word_count": 0,
+                            "headers": {}
+                        }
+                        pages.insert(0, main_page)  # Add at the beginning
+                        discovered += 1
 
             audit = {
                 "url": seed_url,

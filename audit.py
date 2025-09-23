@@ -227,12 +227,30 @@ async def _read_robots(client: httpx.AsyncClient, root: str) -> Dict[str, Any]:
     return rules
 
 def _is_blocked_by_robots(path: str, disallow_rules: List[str]) -> bool:
-    # naive path-startswith matcher
+    # More intelligent robots.txt checking
     for rule in disallow_rules:
         if not rule:
             continue
+        
+        # Skip empty rules
+        if rule.strip() == "":
+            continue
+            
+        # Normalize the rule and path
+        rule = rule.strip()
+        path = path.strip()
+        
+        # If rule is just "/", it blocks everything - but we should still allow the main domain
+        if rule == "/":
+            # Only block if it's not the root path
+            if path != "/":
+                return True
+            continue
+        
+        # Check if path starts with the rule
         if path.startswith(rule):
             return True
+    
     return False
 
 async def analyze_page(client: httpx.AsyncClient, url: str, seed: str) -> Dict[str, Any]:
@@ -331,6 +349,7 @@ async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
             # robots
             robots = await _read_robots(client, root)
             disallow = robots.get("disallow", [])
+            print(f"DEBUG: Robots.txt disallow rules: {disallow[:10]}")  # Show first 10 rules
 
             # PRIORITIZE SEED URL OVER SITEMAP URLS
             # Always start with the seed URL first
@@ -359,9 +378,13 @@ async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
                     visited.add(url)
                     # skip obviously blocked paths (naive)
                     path = urlparse(url).path or "/"
-                    if _is_blocked_by_robots(path, disallow):
+                    is_blocked = _is_blocked_by_robots(path, disallow)
+                    if is_blocked:
+                        print(f"DEBUG: Blocked by robots.txt: {url} (path: {path})")
                         pages.append({"url": url, "status": None, "blocked_by_robots": True})
                         continue
+                    else:
+                        print(f"DEBUG: Allowed by robots.txt: {url} (path: {path})")
 
                     async with sem:
                         page = await analyze_page(client, url, seed_url)

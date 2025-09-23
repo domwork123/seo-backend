@@ -365,3 +365,23 @@ Make all content production-ready and copy-pasteable.
                     }],
                     "error": f"Fallback optimizations provided due to: {str(e)}"
                 }
+            
+    except Exception as e:
+        print(f"LLM optimization error: {e}")
+        # Fallback to base optimizations
+        try:
+            return optimize_site(audit_data, scores)
+        except Exception as base_error:
+            print(f"Base optimization also failed: {base_error}")
+            # Final fallback - return minimal optimizations for ANY website
+            return {
+                "pages_optimized": [{
+                    "url": audit_data.get("url", ""),
+                    "title_suggestion": "Add a compelling title tag",
+                    "meta_suggestion": "Add a descriptive meta description",
+                    "h1_suggestion": "Add a clear H1 heading",
+                    "fallback": True,
+                    "error": f"All optimization methods failed: {str(e)}"
+                }],
+                "error": f"Fallback optimizations provided due to: {str(e)}"
+            }

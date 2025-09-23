@@ -182,7 +182,7 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             
             # Build detailed page content for LLM analysis
             page_details = []
-            for page in pages[:10]:  # Increased to 10 pages for more comprehensive analysis
+            for page in pages:  # Process ALL discovered pages for comprehensive optimization
                 # Safe access to page data with None checks
                 page_info = {
                     'url': page.get('url', '') or '',
@@ -289,13 +289,16 @@ Make all content production-ready and copy-pasteable.
             print(f"Error generating prompt: {prompt_error}")
             return base_optimizations
 
-        # Call OpenAI API with simplified prompt
+        # Call OpenAI API with simplified prompt that includes page data
         simple_prompt = f"""
 Analyze this website: {site_url}
 Pages: {len(pages)} pages found
 Languages: {languages_str}
 
-Provide basic SEO optimizations in JSON format:
+Discovered pages:
+{chr(10).join([f"- {page.get('url', '')}: {page.get('title', 'No title')} (Word count: {page.get('word_count', 0)})" for page in pages[:20]])}
+
+Provide SEO optimizations for ALL discovered pages in JSON format:
 {{
   "pages_optimized": [
     {{
@@ -307,7 +310,7 @@ Provide basic SEO optimizations in JSON format:
   ]
 }}
 
-Focus on the main pages only. Keep it simple and actionable.
+Focus on ALL discovered pages with content. Provide optimizations for every page that has meaningful content, including product pages, category pages, and content pages. Keep it simple and actionable.
 """
         
         response = openai.chat.completions.create(
@@ -316,7 +319,7 @@ Focus on the main pages only. Keep it simple and actionable.
                 {"role": "system", "content": "You are an SEO expert. Return only valid JSON with optimization suggestions."},
                 {"role": "user", "content": simple_prompt}
             ],
-            max_tokens=2000,
+            max_tokens=4000,
             temperature=0.3
         )
         

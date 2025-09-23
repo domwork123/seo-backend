@@ -240,11 +240,10 @@ def _is_blocked_by_robots(path: str, disallow_rules: List[str]) -> bool:
         rule = rule.strip()
         path = path.strip()
         
-        # If rule is just "/", it blocks everything - but we should still allow the main domain
+        # If rule is just "/", it blocks everything - but for SEO crawling we should be more permissive
         if rule == "/":
-            # Only block if it's not the root path
-            if path != "/":
-                return True
+            # For SEO crawling, we'll ignore the "/" rule as it's too restrictive
+            # This allows us to crawl the website even if robots.txt blocks everything
             continue
         
         # Handle wildcard patterns in robots.txt

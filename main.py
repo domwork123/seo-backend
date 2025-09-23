@@ -236,14 +236,61 @@ async def optimize_llm(req: AuditRequest = Body(...)):
         if not url:
             return {"error": "Missing 'url'."}
 
-        # 1. Get audit data
-        audit_result = await audit_site(url, max_pages=50)
+        print(f"DEBUG: Starting LLM optimization for {url}")
         
-        # 2. Get base scores
-        scores = score_website(audit_result)
+        # 1. Get audit data with comprehensive error handling
+        try:
+            audit_result = await audit_site(url, max_pages=50)
+            print(f"DEBUG: Audit completed for {url}")
+        except Exception as audit_error:
+            print(f"DEBUG: Audit failed for {url}: {audit_error}")
+            # Return minimal audit data to prevent complete failure
+            audit_result = {
+                "url": url,
+                "pages": [{"url": url, "title": "", "meta": "", "h1": [], "h2": [], "h3": [], "word_count": 0}],
+                "languages": ["en"],
+                "error": f"Audit failed: {str(audit_error)}"
+            }
         
-        # 3. Generate LLM-powered optimizations
-        llm_optimizations = await optimize_with_llm(audit_result, scores)
+        # 2. Get base scores with error handling
+        try:
+            scores = score_website(audit_result)
+            print(f"DEBUG: Scoring completed for {url}")
+        except Exception as score_error:
+            print(f"DEBUG: Scoring failed for {url}: {score_error}")
+            # Return minimal scores to prevent complete failure
+            scores = {
+                "scores": {
+                    "seo": 0,
+                    "aeo": 0,
+                    "geo": 0,
+                    "accessibility": 0,
+                    "technical": 0,
+                    "overall": 0
+                },
+                "seo_score": 0,
+                "ai_score": 0,
+                "combined_score": 0,
+                "error": f"Scoring failed: {str(score_error)}"
+            }
+        
+        # 3. Generate LLM-powered optimizations with error handling
+        try:
+            llm_optimizations = await optimize_with_llm(audit_result, scores)
+            print(f"DEBUG: LLM optimization completed for {url}")
+        except Exception as llm_error:
+            print(f"DEBUG: LLM optimization failed for {url}: {llm_error}")
+            # Return base optimizations as fallback
+            try:
+                llm_optimizations = optimize_site(audit_result)
+                print(f"DEBUG: Using base optimizations as fallback for {url}")
+            except Exception as base_error:
+                print(f"DEBUG: Base optimization also failed for {url}: {base_error}")
+                # Return minimal optimizations
+                llm_optimizations = {
+                    "pages_optimized": [],
+                    "error": f"All optimization methods failed: {str(llm_error)}"
+                }
         
         return {
             "url": url,
@@ -251,8 +298,17 @@ async def optimize_llm(req: AuditRequest = Body(...)):
             "scores": scores,
             "optimize": llm_optimizations
         }
+        
     except Exception as e:
-        return {"error": "LLM optimization failed", "details": str(e)}
+        print(f"DEBUG: Complete failure for {req.url}: {e}")
+        return {
+            "error": "LLM optimization failed", 
+            "details": str(e),
+            "url": req.url,
+            "audit": {"url": req.url, "pages": [], "error": "Complete failure"},
+            "scores": {"scores": {"overall": 0}, "error": "Complete failure"},
+            "optimize": {"pages_optimized": [], "error": "Complete failure"}
+        }
 
 # ---------- /apply-wordpress ----------
 class WordPressApplyRequest(BaseModel):

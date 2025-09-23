@@ -328,15 +328,16 @@ def _score_single_page(page: Dict[str, Any], audit: Dict[str, Any]) -> Tuple[int
 # --------------- site-level scoring (weighted) ---------------
 def score_website(audit: Dict[str, Any], detail: bool = False) -> Dict[str, Any]:
     """Takes a full audit dict (with pages[]) and returns aggregated SEO + AI scores."""
-    if not isinstance(audit, dict):
-        return {"error": "Invalid audit: expected dict"}
+    try:
+        if not isinstance(audit, dict):
+            return {"error": "Invalid audit: expected dict"}
 
-    pages: List[Dict[str, Any]] = audit.get("pages") or []
-    if not pages:
-        if "url" in audit:  # single page fallback
-            pages = [audit]
-        else:
-            return {"error": "Audit has no pages"}
+        pages: List[Dict[str, Any]] = audit.get("pages") or []
+        if not pages:
+            if "url" in audit:  # single page fallback
+                pages = [audit]
+            else:
+                return {"error": "Audit has no pages"}
 
     total_wc = 0
     weighted_seo = 0.0
@@ -439,4 +440,32 @@ def score_website(audit: Dict[str, Any], detail: bool = False) -> Dict[str, Any]
     if detail:
         result["pages_detail"] = pages_details
     return result
+    
+    except Exception as e:
+        print(f"DEBUG: Scoring failed: {e}")
+        # Return minimal scores to prevent complete failure
+        return {
+            "scores": {
+                "seo": 0,
+                "aeo": 0,
+                "geo": 0,
+                "accessibility": 0,
+                "technical": 0,
+                "overall": 0
+            },
+            "seo_score": 0,
+            "ai_score": 0,
+            "combined_score": 0,
+            "pages_evaluated": 0,
+            "detected_languages": ["en"],
+            "detected_countries": [],
+            "pillar_tasks": {
+                "seo": [],
+                "aeo": [],
+                "geo": [],
+                "accessibility": [],
+                "technical": []
+            },
+            "error": f"Scoring failed: {str(e)}"
+        }
 

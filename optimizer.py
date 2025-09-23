@@ -225,7 +225,18 @@ def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -
     pages = audit.get("pages") or [audit]
     # Filter out non-dict pages and ensure all are dictionaries
     pages = [p for p in pages if isinstance(p, dict)]
-    pages_sorted = sorted(pages, key=lambda p: int(_wc(p)) if isinstance(_wc(p), (int, float)) else 0, reverse=True)
+    # Safe sorting with error handling
+    def safe_word_count(p):
+        try:
+            wc = _wc(p)
+            if isinstance(wc, (int, float)):
+                return int(wc)
+            else:
+                return 0
+        except:
+            return 0
+    
+    pages_sorted = sorted(pages, key=safe_word_count, reverse=True)
     if limit and limit > 0:
         pages_sorted = pages_sorted[:limit]
 

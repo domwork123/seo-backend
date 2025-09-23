@@ -328,90 +328,90 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
         queue: List[str] = []
 
         async with httpx.AsyncClient(follow_redirects=True, timeout=DEFAULT_TIMEOUT, headers=HEADERS) as client:
-        # robots
-        robots = await _read_robots(client, root)
-        disallow = robots.get("disallow", [])
+            # robots
+            robots = await _read_robots(client, root)
+            disallow = robots.get("disallow", [])
 
-        # sitemap
-        sm_urls = await _get_sitemap_urls(client, root)
-        # if empty, start from homepage
-        if not sm_urls:
-            sm_urls = [seed_url]
+            # sitemap
+            sm_urls = await _get_sitemap_urls(client, root)
+            # if empty, start from homepage
+            if not sm_urls:
+                sm_urls = [seed_url]
 
-        # keep only same-site, http(s)
-        seeds = []
-        for u in sm_urls:
-            pu = urlparse(u)
-            if pu.scheme in ("http", "https") and _same_site(seed_url, u):
-                seeds.append(_norm(u))
-        queue.extend(list(dict.fromkeys(seeds)))
+            # keep only same-site, http(s)
+            seeds = []
+            for u in sm_urls:
+                pu = urlparse(u)
+                if pu.scheme in ("http", "https") and _same_site(seed_url, u):
+                    seeds.append(_norm(u))
+            queue.extend(list(dict.fromkeys(seeds)))
 
-        pages: List[Dict[str, Any]] = []
-        broken_site_links: Set[str] = set()
+            pages: List[Dict[str, Any]] = []
+            broken_site_links: Set[str] = set()
 
-        sem = asyncio.Semaphore(MAX_CONCURRENCY)
+            sem = asyncio.Semaphore(MAX_CONCURRENCY)
 
-        async def _worker():
-            while queue and len(visited) < max_pages:
-                url = queue.pop(0)
-                if url in visited:
-                    continue
-                visited.add(url)
-                # skip obviously blocked paths (naive)
-                path = urlparse(url).path or "/"
-                if _is_blocked_by_robots(path, disallow):
-                    pages.append({"url": url, "status": None, "blocked_by_robots": True})
-                    continue
+            async def _worker():
+                while queue and len(visited) < max_pages:
+                    url = queue.pop(0)
+                    if url in visited:
+                        continue
+                    visited.add(url)
+                    # skip obviously blocked paths (naive)
+                    path = urlparse(url).path or "/"
+                    if _is_blocked_by_robots(path, disallow):
+                        pages.append({"url": url, "status": None, "blocked_by_robots": True})
+                        continue
 
-                async with sem:
-                    page = await analyze_page(client, url, seed_url)
-                    pages.append(page)
+                    async with sem:
+                        page = await analyze_page(client, url, seed_url)
+                        pages.append(page)
 
-                    # enqueue new internal links (from page) if we didn't start from sitemap-only scenario
-                    for nxt in page.get("links", {}).get("internal", []):
-                        if len(visited) + len(queue) >= max_pages:
-                            break
-                        if nxt not in visited and nxt not in queue and _same_site(seed_url, nxt):
-                            queue.append(nxt)
+                        # enqueue new internal links (from page) if we didn't start from sitemap-only scenario
+                        for nxt in page.get("links", {}).get("internal", []):
+                            if len(visited) + len(queue) >= max_pages:
+                                break
+                            if nxt not in visited and nxt not in queue and _same_site(seed_url, nxt):
+                                queue.append(nxt)
 
-                    # accumulate broken links
-                    for b in page.get("links", {}).get("broken_internal", []):
-                        broken_site_links.add(b)
+                        # accumulate broken links
+                        for b in page.get("links", {}).get("broken_internal", []):
+                            broken_site_links.add(b)
 
-        workers = [asyncio.create_task(_worker()) for _ in range(min(MAX_CONCURRENCY, 4))]
-        await asyncio.gather(*workers)
+            workers = [asyncio.create_task(_worker()) for _ in range(min(MAX_CONCURRENCY, 4))]
+            await asyncio.gather(*workers)
 
-    # site-level rollups
-    discovered = len(pages)
-    langs = list({p.get("lang") for p in pages if p.get("lang")})
-    canonicals = sum(1 for p in pages if p.get("canonical"))
-    pages_with_index_noindex = {
-        "index": sum(1 for p in pages if p.get("meta_robots") and "index" in p["meta_robots"].lower()),
-        "noindex": sum(1 for p in pages if p.get("meta_robots") and "noindex" in p["meta_robots"].lower()),
-    }
-    pages_blocked_by_robots = sum(1 for p in pages if p.get("blocked_by_robots"))
+            # site-level rollups
+            discovered = len(pages)
+            langs = list({p.get("lang") for p in pages if p.get("lang")})
+            canonicals = sum(1 for p in pages if p.get("canonical"))
+            pages_with_index_noindex = {
+                "index": sum(1 for p in pages if p.get("meta_robots") and "index" in p["meta_robots"].lower()),
+                "noindex": sum(1 for p in pages if p.get("meta_robots") and "noindex" in p["meta_robots"].lower()),
+            }
+            pages_blocked_by_robots = sum(1 for p in pages if p.get("blocked_by_robots"))
 
-    # site-wide hreflang map
-    hreflang_pairs = []
-    for p in pages:
-        for h in p.get("hreflang", []):
-            hreflang_pairs.append({"page": p["url"], "hreflang": h["hreflang"], "href": h["href"]})
-    # simple a11y: total missing alt
-    total_missing_alt = sum(p.get("a11y", {}).get("images_missing_alt", 0) for p in pages if p.get("a11y"))
+            # site-wide hreflang map
+            hreflang_pairs = []
+            for p in pages:
+                for h in p.get("hreflang", []):
+                    hreflang_pairs.append({"page": p["url"], "hreflang": h["hreflang"], "href": h["href"]})
+            # simple a11y: total missing alt
+            total_missing_alt = sum(p.get("a11y", {}).get("images_missing_alt", 0) for p in pages if p.get("a11y"))
 
-    audit = {
-        "url": seed_url,
-        "pages_discovered": discovered,
-        "languages": langs,
-        "pages_with_canonical": canonicals,
-        "robots": robots,
-        "pages_blocked_by_robots": pages_blocked_by_robots,
-        "meta_robots_summary": pages_with_index_noindex,
-        "broken_internal_links_unique": sorted(list(broken_site_links)),
-        "a11y_summary": {"images_missing_alt_total": total_missing_alt},
-        "pages": pages,
-    }
-    return audit
+            audit = {
+                "url": seed_url,
+                "pages_discovered": discovered,
+                "languages": langs,
+                "pages_with_canonical": canonicals,
+                "robots": robots,
+                "pages_blocked_by_robots": pages_blocked_by_robots,
+                "meta_robots_summary": pages_with_index_noindex,
+                "broken_internal_links_unique": sorted(list(broken_site_links)),
+                "a11y_summary": {"images_missing_alt_total": total_missing_alt},
+                "pages": pages,
+            }
+            return audit
     
     except Exception as e:
         print(f"DEBUG: Audit failed for {seed_url}: {e}")

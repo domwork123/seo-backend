@@ -289,37 +289,82 @@ Make all content production-ready and copy-pasteable.
             print(f"Error generating prompt: {prompt_error}")
             return base_optimizations
 
-        # Call OpenAI API with simplified prompt that includes page data
-        simple_prompt = f"""
+        # Call OpenAI API with simplified but comprehensive prompt
+        comprehensive_prompt = f"""
+You are an expert SEO consultant specializing in AI-driven search optimization (AEO), Geographic SEO (GEO), and traditional SEO. 
+
 Analyze this website: {site_url}
 Pages: {len(pages)} pages found
 Languages: {languages_str}
 
-Discovered pages:
-{chr(10).join([f"- {page.get('url', '')}: {page.get('title', 'No title')} (Word count: {page.get('word_count', 0)})" for page in pages[:20]])}
+For EACH discovered page, provide comprehensive optimization tasks organized by sector. This is for a future-focused SEO tool that prepares businesses for AI search, LLM optimization, and AEO.
 
-Provide SEO optimizations for ALL discovered pages in JSON format:
+Return JSON format:
 {{
   "pages_optimized": [
     {{
       "url": "page_url",
-      "new_title": "Optimized title",
-      "new_meta": "Meta description",
-      "new_h1": "H1 heading"
+      "page_type": "product|category|content|homepage|contact|about",
+      "priority": "high|medium|low",
+      "basic_seo": {{
+        "new_title": "Optimized title (50-60 chars)",
+        "new_meta": "Meta description (150-160 chars)",
+        "new_h1": "H1 heading",
+        "h2_suggestions": ["H2 suggestion 1", "H2 suggestion 2"],
+        "h3_suggestions": ["H3 suggestion 1", "H3 suggestion 2"]
+      }},
+      "aeo_optimization": {{
+        "faq_suggestions": [
+          {{"question": "FAQ question 1", "answer": "Detailed answer 1"}},
+          {{"question": "FAQ question 2", "answer": "Detailed answer 2"}}
+        ],
+        "structured_data": "JSON-LD schema markup for this page type",
+        "ai_friendly_content": "Content optimization suggestions for AI search",
+        "answer_engine_tasks": ["Task 1", "Task 2", "Task 3"]
+      }},
+      "geo_optimization": {{
+        "local_seo_tasks": ["Local SEO task 1", "Local SEO task 2"],
+        "hreflang_suggestions": "Hreflang implementation suggestions",
+        "location_signals": "Location-based optimization tasks",
+        "geo_schema": "Geographic schema markup if applicable"
+      }},
+      "technical_seo": {{
+        "schema_markup": "Complete JSON-LD schema for this page",
+        "canonical_suggestions": "Canonical URL recommendations",
+        "internal_linking": "Internal linking strategy for this page",
+        "technical_tasks": ["Technical task 1", "Technical task 2"]
+      }},
+      "content_optimization": {{
+        "content_gaps": ["Content gap 1", "Content gap 2"],
+        "keyword_optimization": "Keyword optimization strategy",
+        "content_structure": "Content structure improvements",
+        "user_intent": "User intent optimization suggestions"
+      }},
+      "performance_tasks": {{
+        "image_optimization": ["Image optimization task 1", "Image optimization task 2"],
+        "speed_optimization": ["Speed optimization task 1", "Speed optimization task 2"],
+        "mobile_optimization": ["Mobile optimization task 1", "Mobile optimization task 2"]
+      }},
+      "future_ai_optimization": {{
+        "llm_search_preparation": "Tasks to prepare for LLM search",
+        "ai_answer_optimization": "Optimize for AI answer snippets",
+        "voice_search_optimization": "Voice search optimization tasks",
+        "ai_crawlability": "AI crawler optimization tasks"
+      }}
     }}
   ]
 }}
 
-Focus on ALL discovered pages with content. Provide optimizations for every page that has meaningful content, including product pages, category pages, and content pages. Keep it simple and actionable.
+Focus on comprehensive, actionable tasks for each page that will help businesses rank in the evolving search landscape.
 """
         
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an SEO expert. Return only valid JSON with optimization suggestions."},
-                {"role": "user", "content": simple_prompt}
+                {"role": "user", "content": comprehensive_prompt}
             ],
-            max_tokens=4000,
+            max_tokens=2000,
             temperature=0.3
         )
         
@@ -377,20 +422,61 @@ Focus on ALL discovered pages with content. Provide optimizations for every page
             
     except Exception as e:
         print(f"LLM optimization error: {e}")
-        # Fallback to base optimizations
-        try:
-            return optimize_site(audit_data)
-        except Exception as base_error:
-            print(f"Base optimization also failed: {base_error}")
-            # Final fallback - return minimal optimizations for ANY website
-            return {
+        # Fallback to comprehensive format instead of old optimize_site
+        print(f"LLM optimization failed, using comprehensive fallback format")
+        # Final fallback - return comprehensive optimizations for ANY website
+        return {
                 "pages_optimized": [{
                     "url": audit_data.get("url", ""),
-                    "new_title": "Add a compelling title tag",
-                    "new_meta": "Add a descriptive meta description",
-                    "new_h1": "Add a clear H1 heading",
+                    "page_type": "homepage",
+                    "priority": "high",
+                    "basic_seo": {
+                        "new_title": "Add a compelling title tag (50-60 characters)",
+                        "new_meta": "Add a descriptive meta description (150-160 characters)",
+                        "new_h1": "Add a clear H1 heading",
+                        "h2_suggestions": ["Add relevant H2 headings", "Structure content with H2s"],
+                        "h3_suggestions": ["Add supporting H3 headings", "Break down content with H3s"]
+                    },
+                    "aeo_optimization": {
+                        "faq_suggestions": [
+                            {"question": "What is your main service?", "answer": "Provide a clear answer about your primary service or product"},
+                            {"question": "How can customers contact you?", "answer": "Include contact information and methods"}
+                        ],
+                        "structured_data": "Add JSON-LD schema markup for your business type",
+                        "ai_friendly_content": "Optimize content for AI search by using clear, structured information",
+                        "answer_engine_tasks": ["Create FAQ section", "Add structured data", "Optimize for voice search"]
+                    },
+                    "geo_optimization": {
+                        "local_seo_tasks": ["Add location information", "Optimize for local search"],
+                        "hreflang_suggestions": "Implement hreflang if targeting multiple languages",
+                        "location_signals": "Add location-based keywords and content",
+                        "geo_schema": "Add LocalBusiness schema markup"
+                    },
+                    "technical_seo": {
+                        "schema_markup": "Add appropriate JSON-LD schema for your page type",
+                        "canonical_suggestions": "Set up canonical URLs",
+                        "internal_linking": "Create internal linking strategy",
+                        "technical_tasks": ["Fix technical issues", "Optimize site structure"]
+                    },
+                    "content_optimization": {
+                        "content_gaps": ["Identify content gaps", "Add missing information"],
+                        "keyword_optimization": "Research and implement target keywords",
+                        "content_structure": "Improve content structure and readability",
+                        "user_intent": "Optimize for user search intent"
+                    },
+                    "performance_tasks": {
+                        "image_optimization": ["Optimize images", "Add alt text"],
+                        "speed_optimization": ["Improve page speed", "Optimize loading times"],
+                        "mobile_optimization": ["Ensure mobile responsiveness", "Test mobile experience"]
+                    },
+                    "future_ai_optimization": {
+                        "llm_search_preparation": "Prepare content for LLM search",
+                        "ai_answer_optimization": "Optimize for AI answer snippets",
+                        "voice_search_optimization": "Optimize for voice search queries",
+                        "ai_crawlability": "Ensure AI crawlers can understand your content"
+                    },
                     "fallback": True,
-                    "error": f"All optimization methods failed: {str(e)}"
+                    "error": f"Comprehensive fallback optimizations provided due to: {str(e)}"
                 }],
                 "error": f"Fallback optimizations provided due to: {str(e)}"
             }

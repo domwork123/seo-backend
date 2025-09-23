@@ -302,17 +302,63 @@ async def optimize_llm(req: AuditRequest = Body(...)):
             print(f"DEBUG: LLM optimization completed for {url}")
         except Exception as llm_error:
             print(f"DEBUG: LLM optimization failed for {url}: {llm_error}")
-            # Return base optimizations as fallback
-            try:
-                llm_optimizations = optimize_site(audit_result)
-                print(f"DEBUG: Using base optimizations as fallback for {url}")
-            except Exception as base_error:
-                print(f"DEBUG: Base optimization also failed for {url}: {base_error}")
-                # Return minimal optimizations
-                llm_optimizations = {
-                    "pages_optimized": [],
-                    "error": f"All optimization methods failed: {str(llm_error)}"
-                }
+            # Return comprehensive fallback optimizations
+            llm_optimizations = {
+                "pages_optimized": [{
+                    "url": url,
+                    "page_type": "homepage",
+                    "priority": "high",
+                    "basic_seo": {
+                        "new_title": "Add a compelling title tag (50-60 characters)",
+                        "new_meta": "Add a descriptive meta description (150-160 characters)",
+                        "new_h1": "Add a clear H1 heading",
+                        "h2_suggestions": ["Add relevant H2 headings", "Structure content with H2s"],
+                        "h3_suggestions": ["Add supporting H3 headings", "Break down content with H3s"]
+                    },
+                    "aeo_optimization": {
+                        "faq_suggestions": [
+                            {"question": "What is your main service?", "answer": "Provide a clear answer about your primary service or product"},
+                            {"question": "How can customers contact you?", "answer": "Include contact information and methods"}
+                        ],
+                        "structured_data": "Add JSON-LD schema markup for your business type",
+                        "ai_friendly_content": "Optimize content for AI search by using clear, structured information",
+                        "answer_engine_tasks": ["Create FAQ section", "Add structured data", "Optimize for voice search"]
+                    },
+                    "geo_optimization": {
+                        "local_seo_tasks": ["Add location information", "Optimize for local search"],
+                        "hreflang_suggestions": "Implement hreflang if targeting multiple languages",
+                        "location_signals": "Add location-based keywords and content",
+                        "geo_schema": "Add LocalBusiness schema markup"
+                    },
+                    "technical_seo": {
+                        "schema_markup": "Add appropriate JSON-LD schema for your page type",
+                        "canonical_suggestions": "Set up canonical URLs",
+                        "internal_linking": "Create internal linking strategy",
+                        "technical_tasks": ["Fix technical issues", "Optimize site structure"]
+                    },
+                    "content_optimization": {
+                        "content_gaps": ["Identify content gaps", "Add missing information"],
+                        "keyword_optimization": "Research and implement target keywords",
+                        "content_structure": "Improve content structure and readability",
+                        "user_intent": "Optimize for user search intent"
+                    },
+                    "performance_tasks": {
+                        "image_optimization": ["Optimize images", "Add alt text"],
+                        "speed_optimization": ["Improve page speed", "Optimize loading times"],
+                        "mobile_optimization": ["Ensure mobile responsiveness", "Test mobile experience"]
+                    },
+                    "future_ai_optimization": {
+                        "llm_search_preparation": "Prepare content for LLM search",
+                        "ai_answer_optimization": "Optimize for AI answer snippets",
+                        "voice_search_optimization": "Optimize for voice search queries",
+                        "ai_crawlability": "Ensure AI crawlers can understand your content"
+                    },
+                    "fallback": True,
+                    "error": f"Comprehensive fallback optimizations provided due to: {str(llm_error)}"
+                }],
+                "error": f"Fallback optimizations provided due to: {str(llm_error)}"
+            }
+            print(f"DEBUG: Using comprehensive fallback optimizations for {url}")
         
         return {
             "url": url,

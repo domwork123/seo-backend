@@ -319,7 +319,7 @@ async def analyze_page(client: httpx.AsyncClient, url: str, seed: str) -> Dict[s
     }
     return page
 
-async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
+async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
     try:
         seed_url = _norm(seed_url)
         parsed = urlparse(seed_url)
@@ -371,7 +371,18 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
                         internal_links = page.get("links", {}).get("internal", [])
                         print(f"DEBUG: Found {len(internal_links)} internal links on {url}")
                         
+                        # PRIORITIZE CONTENT PAGES OVER SITEMAPS
+                        content_links = []
+                        sitemap_links = []
+                        
                         for nxt in internal_links:
+                            if 'sitemap' in nxt.lower() or nxt.endswith('.xml'):
+                                sitemap_links.append(nxt)
+                            else:
+                                content_links.append(nxt)
+                        
+                        # Add content links first, then sitemaps
+                        for nxt in content_links + sitemap_links:
                             if len(visited) + len(queue) >= max_pages:
                                 break
                             if nxt not in visited and nxt not in queue and _same_site(seed_url, nxt):
@@ -383,9 +394,14 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
                             broken_site_links.add(b)
 
             print(f"DEBUG: Starting audit with {len(queue)} URLs in queue")
+            print(f"DEBUG: Queue contents: {queue[:10]}")  # Show first 10 URLs
+            
             workers = [asyncio.create_task(_worker()) for _ in range(min(MAX_CONCURRENCY, 4))]
             await asyncio.gather(*workers)
+            
             print(f"DEBUG: Audit completed. Visited: {len(visited)}, Queue remaining: {len(queue)}")
+            print(f"DEBUG: Content pages found: {len([p for p in pages if not any(ext in p.get('url', '').lower() for ext in ['.xml', '.txt', '.rss', '.atom']) and 'sitemap' not in p.get('url', '').lower()])}")
+            print(f"DEBUG: Sitemap pages found: {len([p for p in pages if 'sitemap' in p.get('url', '').lower() or p.get('url', '').endswith('.xml')])}")
 
             # site-level rollups
             discovered = len(pages)

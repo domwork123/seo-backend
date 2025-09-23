@@ -419,7 +419,7 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
                         if main_resp and main_resp.status_code == 200:
                             print(f"DEBUG: Successfully fetched main domain content")
                             # Parse the main domain page content
-                            main_page = await _parse_page(client, main_domain, main_resp, robots, site_links, broken_site_links, discovered)
+                            main_page = await analyze_page(client, main_domain, seed_url)
                             if main_page:
                                 pages.insert(0, main_page)  # Add at the beginning
                                 discovered += 1

@@ -91,26 +91,9 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
                 print(f"DEBUG: SKIPPING technical file: {url}")
                 continue
             
-            # CONTENT VALIDATION - More lenient criteria for any website
-            has_title = bool(page.get('title', '').strip())
-            has_meta = bool(page.get('meta', '').strip())
-            has_h1 = bool(page.get('h1', []))
-            has_h2 = bool(page.get('h2', []))
-            has_h3 = bool(page.get('h3', []))
-            has_content = page.get('word_count', 0) > 20  # Reduced from 50 to 20 words
-            has_images = bool(page.get('images', []))
-            has_links = bool(page.get('links', {}).get('internal', []) or page.get('links', {}).get('external', []))
-            
-            # More lenient content scoring - include pages with ANY meaningful content
-            content_score = sum([has_title, has_meta, has_h1, has_h2, has_h3, has_content, has_images, has_links])
-            
-            # Include pages with at least 1 meaningful element OR 20+ words
-            if content_score >= 1 or page.get('word_count', 0) > 20:
-                content_pages.append(page)
-                print(f"DEBUG: INCLUDING content page: {url} (score: {content_score})")
-            else:
-                skipped_count += 1
-                print(f"DEBUG: SKIPPING low-content page: {url} (score: {content_score})")
+            # INCLUDE ANY PAGE THAT'S NOT A TECHNICAL FILE - NO CONTENT VALIDATION
+            content_pages.append(page)
+            print(f"DEBUG: INCLUDING content page: {url}")
         
         print(f"DEBUG: FILTERING COMPLETE - {len(content_pages)} content pages, {skipped_count} pages skipped")
         

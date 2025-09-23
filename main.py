@@ -165,8 +165,29 @@ async def process(req: AuditRequest):
         ai_score = score_results.get("ai_score")
         combined_score = score_results.get("combined_score")
         
-        # 3️⃣ Run optimization
-        optimize_results = optimize_site(audit_results, limit=10, detail=True)
+        # 3️⃣ Run LLM-powered optimization
+        try:
+            optimize_results = await optimize_with_llm(audit_results, score_results)
+            print(f"DEBUG: LLM optimization completed for {req.url}")
+        except Exception as llm_error:
+            print(f"DEBUG: LLM optimization failed for {req.url}: {llm_error}")
+            # Fallback to base optimizations
+            try:
+                optimize_results = optimize_site(audit_results, limit=10, detail=True)
+                print(f"DEBUG: Using base optimizations as fallback for {req.url}")
+            except Exception as base_error:
+                print(f"DEBUG: Base optimization also failed for {req.url}: {base_error}")
+                optimize_results = {
+                    "pages_optimized": [{
+                        "url": req.url,
+                        "new_title": "Add a compelling title tag",
+                        "new_meta": "Add a descriptive meta description",
+                        "new_h1": "Add a clear H1 heading",
+                        "fallback": True,
+                        "error": f"All optimization methods failed: {str(base_error)}"
+                    }],
+                    "error": f"Fallback optimizations provided due to: {str(base_error)}"
+                }
             
         # 4️⃣ Insert into sites (once)
         site_id = None

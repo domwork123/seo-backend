@@ -422,6 +422,7 @@ async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
                         # Add content links first, then sitemaps
                         for nxt in content_links + sitemap_links:
                             if len(visited) + len(queue) >= max_pages:
+                                print(f"DEBUG: Max pages limit reached ({max_pages}), stopping link discovery")
                                 break
                             if nxt not in visited and nxt not in queue and _same_site(seed_url, nxt):
                                 queue.append(nxt)
@@ -433,6 +434,7 @@ async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
 
             print(f"DEBUG: Starting audit with {len(queue)} URLs in queue")
             print(f"DEBUG: Queue contents: {queue[:10]}")  # Show first 10 URLs
+            print(f"DEBUG: Max pages limit: {max_pages}")
             
             workers = [asyncio.create_task(_worker()) for _ in range(min(MAX_CONCURRENCY, 4))]
             await asyncio.gather(*workers)

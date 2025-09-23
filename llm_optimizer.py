@@ -91,18 +91,21 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
                 print(f"DEBUG: SKIPPING technical file: {url}")
                 continue
             
-            # CONTENT VALIDATION - Only include pages with substantial content
+            # CONTENT VALIDATION - More lenient criteria for any website
             has_title = bool(page.get('title', '').strip())
             has_meta = bool(page.get('meta', '').strip())
             has_h1 = bool(page.get('h1', []))
             has_h2 = bool(page.get('h2', []))
-            has_content = page.get('word_count', 0) > 50  # Increased back to 50 words
+            has_h3 = bool(page.get('h3', []))
+            has_content = page.get('word_count', 0) > 20  # Reduced from 50 to 20 words
+            has_images = bool(page.get('images', []))
+            has_links = bool(page.get('links', {}).get('internal', []) or page.get('links', {}).get('external', []))
             
-            # Must have substantial content (at least 2 of: title, meta, h1, h2, or 50+ words)
-            content_score = sum([has_title, has_meta, has_h1, has_h2, has_content])
+            # More lenient content scoring - include pages with ANY meaningful content
+            content_score = sum([has_title, has_meta, has_h1, has_h2, has_h3, has_content, has_images, has_links])
             
-            # Only include pages with meaningful content
-            if content_score >= 2:
+            # Include pages with at least 1 meaningful element OR 20+ words
+            if content_score >= 1 or page.get('word_count', 0) > 20:
                 content_pages.append(page)
                 print(f"DEBUG: INCLUDING content page: {url} (score: {content_score})")
             else:
@@ -125,10 +128,29 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         pages = final_pages
         print(f"DEBUG: FINAL RESULT - {len(pages)} content pages ready for optimization")
         
-        # If no content pages found, return base optimizations
+        # If no content pages found, try with even more lenient criteria
         if len(pages) == 0:
-            print("DEBUG: No content pages found - returning base optimizations only")
-            return base_optimizations
+            print("DEBUG: No content pages found - trying with ultra-lenient criteria")
+            ultra_lenient_pages = []
+            # Use original pages list, not the filtered one
+            original_pages = audit_data.get("pages", [])
+            for page in original_pages:
+                if not isinstance(page, dict):
+                    continue
+                url = page.get('url', '')
+                # Skip only obvious technical files
+                if any(ext in url.lower() for ext in ['.xml', '.txt', '.rss', '.atom']) or 'sitemap' in url.lower():
+                    continue
+                # Include ANY page that's not a technical file
+                ultra_lenient_pages.append(page)
+                print(f"DEBUG: ULTRA-LENIENT - Including page: {url}")
+            
+            if ultra_lenient_pages:
+                pages = ultra_lenient_pages
+                print(f"DEBUG: ULTRA-LENIENT RESULT - {len(pages)} pages ready for optimization")
+            else:
+                print("DEBUG: No pages found even with ultra-lenient criteria - returning base optimizations only")
+                return base_optimizations
         
         # Ensure languages is a list
         if not isinstance(languages, list):
@@ -324,7 +346,22 @@ Make all content production-ready and copy-pasteable.
             print(f"LLM response parsing failed, using base optimizations: {llm_content[:200]}...")
             return base_optimizations
             
-    except Exception as e:
-        print(f"LLM optimization error: {e}")
-        # Fallback to base optimizations
-        return optimize_site(audit_data, scores)
+        except Exception as e:
+            print(f"LLM optimization error: {e}")
+            # Fallback to base optimizations
+            try:
+                return optimize_site(audit_data, scores)
+            except Exception as base_error:
+                print(f"Base optimization also failed: {base_error}")
+                # Final fallback - return minimal optimizations for ANY website
+                return {
+                    "pages_optimized": [{
+                        "url": audit_data.get("url", ""),
+                        "title_suggestion": "Add a compelling title tag",
+                        "meta_suggestion": "Add a descriptive meta description",
+                        "h1_suggestion": "Add a clear H1 heading",
+                        "fallback": True,
+                        "error": f"All optimization methods failed: {str(e)}"
+                    }],
+                    "error": f"Fallback optimizations provided due to: {str(e)}"
+                }

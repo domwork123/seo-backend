@@ -45,7 +45,7 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
                         filtered_pages.append(page)
             filtered_audit_data["pages"] = filtered_pages
         
-        base_optimizations = optimize_site(filtered_audit_data, scores)
+        base_optimizations = optimize_site(filtered_audit_data)
         print(f"DEBUG: Base optimizations obtained successfully (filtered) - {len(base_optimizations.get('pages_optimized', []))} pages")
         
         # Check if OpenAI is available
@@ -356,7 +356,7 @@ Focus on the main pages only. Keep it simple and actionable.
             print(f"LLM optimization error: {e}")
             # Fallback to base optimizations
             try:
-                return optimize_site(audit_data, scores)
+                return optimize_site(audit_data)
             except Exception as base_error:
                 print(f"Base optimization also failed: {base_error}")
                 # Final fallback - return minimal optimizations for ANY website
@@ -376,7 +376,7 @@ Focus on the main pages only. Keep it simple and actionable.
         print(f"LLM optimization error: {e}")
         # Fallback to base optimizations
         try:
-            return optimize_site(audit_data, scores)
+            return optimize_site(audit_data)
         except Exception as base_error:
             print(f"Base optimization also failed: {base_error}")
             # Final fallback - return minimal optimizations for ANY website

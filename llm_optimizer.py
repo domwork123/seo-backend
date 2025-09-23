@@ -300,9 +300,9 @@ Provide basic SEO optimizations in JSON format:
   "pages_optimized": [
     {{
       "url": "page_url",
-      "title_suggestion": "Optimized title",
-      "meta_suggestion": "Meta description",
-      "h1_suggestion": "H1 heading"
+      "new_title": "Optimized title",
+      "new_meta": "Meta description",
+      "new_h1": "H1 heading"
     }}
   ]
 }}
@@ -363,9 +363,9 @@ Focus on the main pages only. Keep it simple and actionable.
                 return {
                     "pages_optimized": [{
                         "url": audit_data.get("url", ""),
-                        "title_suggestion": "Add a compelling title tag",
-                        "meta_suggestion": "Add a descriptive meta description",
-                        "h1_suggestion": "Add a clear H1 heading",
+                        "new_title": "Add a compelling title tag",
+                        "new_meta": "Add a descriptive meta description",
+                        "new_h1": "Add a clear H1 heading",
                         "fallback": True,
                         "error": f"All optimization methods failed: {str(e)}"
                     }],
@@ -383,9 +383,9 @@ Focus on the main pages only. Keep it simple and actionable.
             return {
                 "pages_optimized": [{
                     "url": audit_data.get("url", ""),
-                    "title_suggestion": "Add a compelling title tag",
-                    "meta_suggestion": "Add a descriptive meta description",
-                    "h1_suggestion": "Add a clear H1 heading",
+                    "new_title": "Add a compelling title tag",
+                    "new_meta": "Add a descriptive meta description",
+                    "new_h1": "Add a clear H1 heading",
                     "fallback": True,
                     "error": f"All optimization methods failed: {str(e)}"
                 }],

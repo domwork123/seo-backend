@@ -339,107 +339,107 @@ def score_website(audit: Dict[str, Any], detail: bool = False) -> Dict[str, Any]
             else:
                 return {"error": "Audit has no pages"}
 
-    total_wc = 0
-    weighted_seo = 0.0
-    weighted_ai = 0.0
-    seo_task_counter = Counter()
-    ai_task_counter = Counter()
-    pages_details: List[Dict[str, Any]] = []
-    langs = Counter()
-    cities = Counter()
-    countries = Counter()
-    # Pillar aggregations
-    pillar_weighted_points = {"SEO": 0.0, "AEO": 0.0, "GEO": 0.0, "A11Y": 0.0, "TECH": 0.0}
-    pillar_weighted_max = {"SEO": 0.0, "AEO": 0.0, "GEO": 0.0, "A11Y": 0.0, "TECH": 0.0}
-    pillar_task_counter = {"SEO": Counter(), "AEO": Counter(), "GEO": Counter(), "A11Y": Counter(), "TECH": Counter()}
+        total_wc = 0
+        weighted_seo = 0.0
+        weighted_ai = 0.0
+        seo_task_counter = Counter()
+        ai_task_counter = Counter()
+        pages_details: List[Dict[str, Any]] = []
+        langs = Counter()
+        cities = Counter()
+        countries = Counter()
+        # Pillar aggregations
+        pillar_weighted_points = {"SEO": 0.0, "AEO": 0.0, "GEO": 0.0, "A11Y": 0.0, "TECH": 0.0}
+        pillar_weighted_max = {"SEO": 0.0, "AEO": 0.0, "GEO": 0.0, "A11Y": 0.0, "TECH": 0.0}
+        pillar_task_counter = {"SEO": Counter(), "AEO": Counter(), "GEO": Counter(), "A11Y": Counter(), "TECH": Counter()}
 
-    for page in pages:
-        try:
-            seo, ai, seo_tasks, ai_tasks, meta, p_points, p_max, p_tasks = _score_single_page(page, audit)
-        except Exception:
-            continue
+        for page in pages:
+            try:
+                seo, ai, seo_tasks, ai_tasks, meta, p_points, p_max, p_tasks = _score_single_page(page, audit)
+            except Exception:
+                continue
 
-        wc = _word_count(page)
-        w = wc if wc > 0 else 1
-        total_wc += w
-        weighted_seo += seo * w
-        weighted_ai += ai * w
-        for t in seo_tasks: seo_task_counter[t] += 1
-        for t in ai_tasks: ai_task_counter[t] += 1
-        if meta["language"]: langs[meta["language"]] += 1
-        if meta["city"]: cities[meta["city"]] += 1
-        if meta["country"]: countries[meta["country"]] += 1
+            wc = _word_count(page)
+            w = wc if wc > 0 else 1
+            total_wc += w
+            weighted_seo += seo * w
+            weighted_ai += ai * w
+            for t in seo_tasks: seo_task_counter[t] += 1
+            for t in ai_tasks: ai_task_counter[t] += 1
+            if meta["language"]: langs[meta["language"]] += 1
+            if meta["city"]: cities[meta["city"]] += 1
+            if meta["country"]: countries[meta["country"]] += 1
 
-        # Pillar accumulation
+            # Pillar accumulation
+            for key in pillar_weighted_points.keys():
+                pillar_weighted_points[key] += float(p_points.get(key, 0)) * w
+                pillar_weighted_max[key] += float(p_max.get(key, 0)) * w
+                for t in p_tasks.get(key, []):
+                    pillar_task_counter[key][t] += 1
+
+            if detail:
+                pages_details.append({
+                    "url": page.get("url", ""),
+                    "title": _title(page),
+                    "word_count": wc,
+                    "seo_score_page": seo,
+                    "ai_score_page": ai,
+                    "language": meta["language"],
+                    "city": meta["city"],
+                    "country": meta["country"],
+                    "top_seo_tasks": seo_tasks[:3],
+                    "top_ai_tasks": ai_tasks[:3],
+                })
+
+        if total_wc == 0:
+            total_wc = len(pages) or 1
+
+        seo_score_raw = float(weighted_seo) / float(total_wc)
+        ai_score_raw = float(weighted_ai) / float(total_wc)
+
+        # Normalize pillars to 0-100
+        pillar_scores = {}
         for key in pillar_weighted_points.keys():
-            pillar_weighted_points[key] += float(p_points.get(key, 0)) * w
-            pillar_weighted_max[key] += float(p_max.get(key, 0)) * w
-            for t in p_tasks.get(key, []):
-                pillar_task_counter[key][t] += 1
+            denom = pillar_weighted_max[key] if pillar_weighted_max[key] > 0 else 1.0
+            pct = int(round(100.0 * pillar_weighted_points[key] / denom))
+            pillar_scores[key] = max(0, min(100, pct))
 
+        # Back-compat fields: map SEO->seo_score, AEO->ai_score
+        seo_score = pillar_scores["SEO"]
+        ai_score = pillar_scores["AEO"]
+        combined = int(round((seo_score + ai_score) / 2))
+
+        top_seo_tasks = [f"{t} (x{c})" for t, c in seo_task_counter.most_common(25)]
+        top_ai_tasks = [f"{t} (x{c})" for t, c in ai_task_counter.most_common(25)]
+        pillar_tasks_out = {
+            k: [f"{t} (x{c})" for t, c in cnt.most_common(20)] for k, cnt in pillar_task_counter.items()
+        }
+
+        result = {
+            # New pillar scores
+            "scores": {
+                "seo": pillar_scores["SEO"],
+                "aeo": pillar_scores["AEO"],
+                "geo": pillar_scores["GEO"],
+                "a11y": pillar_scores["A11Y"],
+                "technical": pillar_scores["TECH"],
+                "overall": int(round(sum(pillar_scores.values()) / 5.0))
+            },
+            # Backward-compatible fields
+            "seo_score": seo_score,
+            "ai_score": ai_score,
+            "combined_score": combined,
+            "pages_evaluated": len(pages),
+            "detected_languages": dict(langs),
+            "detected_cities": dict(cities),
+            "detected_countries": dict(countries),
+            "seo_tasks": top_seo_tasks,
+            "ai_tasks": top_ai_tasks,
+            "pillar_tasks": pillar_tasks_out
+        }
         if detail:
-            pages_details.append({
-                "url": page.get("url", ""),
-                "title": _title(page),
-                "word_count": wc,
-                "seo_score_page": seo,
-                "ai_score_page": ai,
-                "language": meta["language"],
-                "city": meta["city"],
-                "country": meta["country"],
-                "top_seo_tasks": seo_tasks[:3],
-                "top_ai_tasks": ai_tasks[:3],
-            })
-
-    if total_wc == 0:
-        total_wc = len(pages) or 1
-
-    seo_score_raw = float(weighted_seo) / float(total_wc)
-    ai_score_raw = float(weighted_ai) / float(total_wc)
-
-    # Normalize pillars to 0-100
-    pillar_scores = {}
-    for key in pillar_weighted_points.keys():
-        denom = pillar_weighted_max[key] if pillar_weighted_max[key] > 0 else 1.0
-        pct = int(round(100.0 * pillar_weighted_points[key] / denom))
-        pillar_scores[key] = max(0, min(100, pct))
-
-    # Back-compat fields: map SEO->seo_score, AEO->ai_score
-    seo_score = pillar_scores["SEO"]
-    ai_score = pillar_scores["AEO"]
-    combined = int(round((seo_score + ai_score) / 2))
-
-    top_seo_tasks = [f"{t} (x{c})" for t, c in seo_task_counter.most_common(25)]
-    top_ai_tasks = [f"{t} (x{c})" for t, c in ai_task_counter.most_common(25)]
-    pillar_tasks_out = {
-        k: [f"{t} (x{c})" for t, c in cnt.most_common(20)] for k, cnt in pillar_task_counter.items()
-    }
-
-    result = {
-        # New pillar scores
-        "scores": {
-            "seo": pillar_scores["SEO"],
-            "aeo": pillar_scores["AEO"],
-            "geo": pillar_scores["GEO"],
-            "a11y": pillar_scores["A11Y"],
-            "technical": pillar_scores["TECH"],
-            "overall": int(round(sum(pillar_scores.values()) / 5.0))
-        },
-        # Backward-compatible fields
-        "seo_score": seo_score,
-        "ai_score": ai_score,
-        "combined_score": combined,
-        "pages_evaluated": len(pages),
-        "detected_languages": dict(langs),
-        "detected_cities": dict(cities),
-        "detected_countries": dict(countries),
-        "seo_tasks": top_seo_tasks,
-        "ai_tasks": top_ai_tasks,
-        "pillar_tasks": pillar_tasks_out
-    }
-    if detail:
-        result["pages_detail"] = pages_details
-    return result
+            result["pages_detail"] = pages_details
+        return result
     
     except Exception as e:
         print(f"DEBUG: Scoring failed: {e}")

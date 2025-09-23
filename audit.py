@@ -406,7 +406,8 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
             if not content_pages and len(pages) > 0:
                 print(f"DEBUG: No content pages found, only technical files. Adding main domain as fallback.")
                 # Extract main domain from seed URL
-                parsed = urlparse(seed_url)
+                from urllib.parse import urlparse as url_parse
+                parsed = url_parse(seed_url)
                 main_domain = f"{parsed.scheme}://{parsed.netloc}/"
                 
                 # Add main domain as a content page if it's different from seed

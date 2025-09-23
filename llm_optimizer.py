@@ -24,8 +24,29 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
         print(f"DEBUG: audit_data keys: {list(audit_data.keys()) if isinstance(audit_data, dict) else 'Not a dict'}")
         print(f"DEBUG: scores keys: {list(scores.keys()) if isinstance(scores, dict) else 'Not a dict'}")
         
-        base_optimizations = optimize_site(audit_data)
-        print("DEBUG: Base optimizations obtained successfully")
+        # Get base optimizations but filter out sitemap URLs first
+        filtered_audit_data = audit_data.copy()
+        if "pages" in filtered_audit_data:
+            filtered_pages = []
+            for page in filtered_audit_data["pages"]:
+                if isinstance(page, dict):
+                    url = page.get('url', '')
+                    # Apply same filtering as LLM optimization
+                    technical_patterns = [
+                        'sitemap', 'robots.txt', '.xml', 'feed', 'rss', 'atom', 
+                        'sitemap.xml', 'post-sitemap', 'page-sitemap', 'tag-sitemap',
+                        'category-sitemap', 'product-sitemap', 'job-sitemap',
+                        'news-sitemap', 'image-sitemap', 'video-sitemap'
+                    ]
+                    is_technical_file = any(pattern in url.lower() for pattern in technical_patterns)
+                    has_technical_extension = any(url.lower().endswith(ext) for ext in ['.xml', '.txt', '.rss', '.atom'])
+                    
+                    if not (is_technical_file or has_technical_extension):
+                        filtered_pages.append(page)
+            filtered_audit_data["pages"] = filtered_pages
+        
+        base_optimizations = optimize_site(filtered_audit_data)
+        print("DEBUG: Base optimizations obtained successfully (filtered)")
         
         # Check if OpenAI is available
         if not openai:

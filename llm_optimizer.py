@@ -289,15 +289,35 @@ Make all content production-ready and copy-pasteable.
             print(f"Error generating prompt: {prompt_error}")
             return base_optimizations
 
-        # Call OpenAI API
+        # Call OpenAI API with simplified prompt
+        simple_prompt = f"""
+Analyze this website: {site_url}
+Pages: {len(pages)} pages found
+Languages: {languages_str}
+
+Provide basic SEO optimizations in JSON format:
+{{
+  "pages_optimized": [
+    {{
+      "url": "page_url",
+      "title_suggestion": "Optimized title",
+      "meta_suggestion": "Meta description",
+      "h1_suggestion": "H1 heading"
+    }}
+  ]
+}}
+
+Focus on the main pages only. Keep it simple and actionable.
+"""
+        
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an expert SEO specialist. Provide actionable, production-ready optimizations in valid JSON format."},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": "You are an SEO expert. Return only valid JSON with optimization suggestions."},
+                {"role": "user", "content": simple_prompt}
             ],
-            max_tokens=4000,
-            temperature=0.7
+            max_tokens=2000,
+            temperature=0.3
         )
         
         # Parse LLM response

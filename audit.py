@@ -332,19 +332,19 @@ async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
             robots = await _read_robots(client, root)
             disallow = robots.get("disallow", [])
 
-            # sitemap
+            # PRIORITIZE SEED URL OVER SITEMAP URLS
+            # Always start with the seed URL first
+            queue.append(seed_url)
+            
+            # Then add sitemap URLs as secondary
             sm_urls = await _get_sitemap_urls(client, root)
-            # if empty, start from homepage
-            if not sm_urls:
-                sm_urls = [seed_url]
-
-            # keep only same-site, http(s)
-            seeds = []
-            for u in sm_urls:
-                pu = urlparse(u)
-                if pu.scheme in ("http", "https") and _same_site(seed_url, u):
-                    seeds.append(_norm(u))
-            queue.extend(list(dict.fromkeys(seeds)))
+            if sm_urls:
+                # Filter and add sitemap URLs
+                for u in sm_urls:
+                    pu = urlparse(u)
+                    if pu.scheme in ("http", "https") and _same_site(seed_url, u):
+                        if u not in queue:  # Avoid duplicates
+                            queue.append(_norm(u))
 
             pages: List[Dict[str, Any]] = []
             broken_site_links: Set[str] = set()

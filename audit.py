@@ -367,19 +367,25 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
                         page = await analyze_page(client, url, seed_url)
                         pages.append(page)
 
-                        # enqueue new internal links (from page) if we didn't start from sitemap-only scenario
-                        for nxt in page.get("links", {}).get("internal", []):
+                        # AGGRESSIVE LINK FOLLOWING - Add ALL internal links immediately
+                        internal_links = page.get("links", {}).get("internal", [])
+                        print(f"DEBUG: Found {len(internal_links)} internal links on {url}")
+                        
+                        for nxt in internal_links:
                             if len(visited) + len(queue) >= max_pages:
                                 break
                             if nxt not in visited and nxt not in queue and _same_site(seed_url, nxt):
                                 queue.append(nxt)
+                                print(f"DEBUG: Added to queue: {nxt}")
 
                         # accumulate broken links
                         for b in page.get("links", {}).get("broken_internal", []):
                             broken_site_links.add(b)
 
+            print(f"DEBUG: Starting audit with {len(queue)} URLs in queue")
             workers = [asyncio.create_task(_worker()) for _ in range(min(MAX_CONCURRENCY, 4))]
             await asyncio.gather(*workers)
+            print(f"DEBUG: Audit completed. Visited: {len(visited)}, Queue remaining: {len(queue)}")
 
             # site-level rollups
             discovered = len(pages)

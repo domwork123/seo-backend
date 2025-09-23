@@ -227,7 +227,7 @@ async def _read_robots(client: httpx.AsyncClient, root: str) -> Dict[str, Any]:
     return rules
 
 def _is_blocked_by_robots(path: str, disallow_rules: List[str]) -> bool:
-    # More intelligent robots.txt checking
+    # More intelligent robots.txt checking with wildcard support
     for rule in disallow_rules:
         if not rule:
             continue
@@ -247,9 +247,20 @@ def _is_blocked_by_robots(path: str, disallow_rules: List[str]) -> bool:
                 return True
             continue
         
-        # Check if path starts with the rule
-        if path.startswith(rule):
-            return True
+        # Handle wildcard patterns in robots.txt
+        if "*" in rule:
+            # Convert robots.txt wildcard pattern to regex
+            import re
+            # Escape special regex characters except *
+            escaped_rule = re.escape(rule).replace(r"\*", ".*")
+            # Add anchors to match full path segments
+            pattern = f"^{escaped_rule}$"
+            if re.match(pattern, path):
+                return True
+        else:
+            # Simple prefix matching for non-wildcard rules
+            if path.startswith(rule):
+                return True
     
     return False
 

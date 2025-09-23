@@ -200,15 +200,16 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
             # Build detailed page content for LLM analysis
             page_details = []
             for page in pages[:10]:  # Increased to 10 pages for more comprehensive analysis
+                # Safe access to page data with None checks
                 page_info = {
-                    'url': page.get('url', ''),
-                    'title': page.get('title', ''),
-                    'meta': page.get('meta', ''),
-                    'h1': page.get('h1', []),
-                    'h2': page.get('h2', []),
-                    'word_count': page.get('word_count', 0),
-                    'lang': page.get('lang', ''),
-                    'images_count': len(page.get('images', []))
+                    'url': page.get('url', '') or '',
+                    'title': page.get('title', '') or '',
+                    'meta': page.get('meta', '') or '',
+                    'h1': page.get('h1', []) or [],
+                    'h2': page.get('h2', []) or [],
+                    'word_count': page.get('word_count', 0) or 0,
+                    'lang': page.get('lang', '') or '',
+                    'images_count': len(page.get('images', []) or [])
                 }
                 page_details.append(page_info)
             

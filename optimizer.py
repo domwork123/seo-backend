@@ -31,7 +31,7 @@ def _wc(p):
     n = p.get("word_count")
     if isinstance(n, (int,float)): return int(n)
     body = p.get("body_text") or p.get("text") or p.get("content") or ""
-    return len(str(body).split())
+    return int(len(str(body).split()))
 
 def _shorten_ascii(s: str, n: int) -> str:
     """Trim to n chars; use '...' (ASCII) for ellipsis."""
@@ -225,7 +225,7 @@ def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -
     pages = audit.get("pages") or [audit]
     # Filter out non-dict pages and ensure all are dictionaries
     pages = [p for p in pages if isinstance(p, dict)]
-    pages_sorted = sorted(pages, key=lambda p: _wc(p), reverse=True)
+    pages_sorted = sorted(pages, key=lambda p: int(_wc(p)) if isinstance(_wc(p), (int, float)) else 0, reverse=True)
     if limit and limit > 0:
         pages_sorted = pages_sorted[:limit]
 

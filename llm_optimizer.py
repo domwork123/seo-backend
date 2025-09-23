@@ -45,8 +45,8 @@ async def optimize_with_llm(audit_data: Dict[str, Any], scores: Dict[str, Any]) 
                         filtered_pages.append(page)
             filtered_audit_data["pages"] = filtered_pages
         
-        base_optimizations = optimize_site(filtered_audit_data)
-        print("DEBUG: Base optimizations obtained successfully (filtered)")
+        base_optimizations = optimize_site(filtered_audit_data, scores)
+        print(f"DEBUG: Base optimizations obtained successfully (filtered) - {len(base_optimizations.get('pages_optimized', []))} pages")
         
         # Check if OpenAI is available
         if not openai:
@@ -302,6 +302,8 @@ Make all content production-ready and copy-pasteable.
         
         # Parse LLM response
         llm_content = response.choices[0].message.content.strip()
+        print(f"DEBUG: LLM response length: {len(llm_content)}")
+        print(f"DEBUG: LLM response preview: {llm_content[:200]}...")
         
         # Try to extract JSON from response
         try:

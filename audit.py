@@ -399,6 +399,45 @@ async def audit_site(seed_url: str, max_pages: int = 50) -> Dict[str, Any]:
             # simple a11y: total missing alt
             total_missing_alt = sum(p.get("a11y", {}).get("images_missing_alt", 0) for p in pages if p.get("a11y"))
 
+            # Check if we only found technical files (XML sitemaps, etc.)
+            content_pages = [p for p in pages if not any(ext in p.get('url', '').lower() for ext in ['.xml', '.txt', '.rss', '.atom']) and 'sitemap' not in p.get('url', '').lower()]
+            
+            # If no content pages found, try to add the main domain as a fallback
+            if not content_pages and len(pages) > 0:
+                print(f"DEBUG: No content pages found, only technical files. Adding main domain as fallback.")
+                # Extract main domain from seed URL
+                from urllib.parse import urlparse
+                parsed = urlparse(seed_url)
+                main_domain = f"{parsed.scheme}://{parsed.netloc}/"
+                
+                # Add main domain as a content page if it's different from seed
+                if main_domain != seed_url:
+                    main_page = {
+                        "url": main_domain,
+                        "status": 200,
+                        "title": "",
+                        "meta": "",
+                        "h1": [],
+                        "h2": [],
+                        "h3": [],
+                        "lang": "en",
+                        "canonical": main_domain,
+                        "meta_robots": None,
+                        "x_robots_tag": None,
+                        "hreflang": [],
+                        "images": [],
+                        "links": {"internal": [], "external": [], "broken_internal": []},
+                        "schema": {"json_ld": [], "microdata": [], "opengraph": [], "rdfa": []},
+                        "faq": [],
+                        "nap": {"phone": "", "address": ""},
+                        "a11y": {"images_missing_alt": 0},
+                        "performance_hints": {"html_bytes": 0, "images_total_bytes_sampled": 0, "images_with_lazy": 0, "images_missing_dimensions": 0},
+                        "word_count": 0,
+                        "headers": {}
+                    }
+                    pages.insert(0, main_page)  # Add at the beginning
+                    discovered += 1
+
             audit = {
                 "url": seed_url,
                 "pages_discovered": discovered,

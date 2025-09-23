@@ -392,6 +392,10 @@ async def audit_site(seed_url: str, max_pages: int = 100) -> Dict[str, Any]:
                     is_blocked = _is_blocked_by_robots(path, disallow)
                     if is_blocked:
                         print(f"DEBUG: Blocked by robots.txt: {url} (path: {path})")
+                        # Show which rule is blocking it
+                        for rule in disallow:
+                            if rule and path.startswith(rule.replace("*", "")):
+                                print(f"DEBUG: Blocked by rule: {rule}")
                         pages.append({"url": url, "status": None, "blocked_by_robots": True})
                         continue
                     else:

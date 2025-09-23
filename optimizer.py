@@ -228,6 +228,8 @@ def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -
     # Safe sorting with error handling
     def safe_word_count(p):
         try:
+            if not isinstance(p, dict):
+                return 0
             wc = _wc(p)
             if isinstance(wc, (int, float)):
                 return int(wc)
@@ -236,7 +238,12 @@ def optimize_site(audit: Dict[str, Any], limit: int = 10, detail: bool = True) -
         except:
             return 0
     
-    pages_sorted = sorted(pages, key=safe_word_count, reverse=True)
+    # Sort pages safely - if any comparison fails, just use original order
+    try:
+        pages_sorted = sorted(pages, key=safe_word_count, reverse=True)
+    except Exception as e:
+        print(f"DEBUG: Sorting failed, using original order: {e}")
+        pages_sorted = pages
     if limit and limit > 0:
         pages_sorted = pages_sorted[:limit]
 

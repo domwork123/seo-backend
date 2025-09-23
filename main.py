@@ -15,6 +15,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 from scoring import score_website
 from optimizer import optimize_site
 from audit import audit_site
+from enhanced_audit import enhanced_audit_site
 from llm_optimizer import optimize_with_llm
 
 
@@ -308,6 +309,97 @@ async def optimize_llm(req: AuditRequest = Body(...)):
             "audit": {"url": req.url, "pages": [], "error": "Complete failure"},
             "scores": {"scores": {"overall": 0}, "error": "Complete failure"},
             "optimize": {"pages_optimized": [], "error": "Complete failure"}
+        }
+
+# ---------- Enhanced Audit with JavaScript Support ----------
+@app.post("/optimize-llm-enhanced")
+async def optimize_llm_enhanced(req: AuditRequest = Body(...)):
+    """Enhanced optimization with JavaScript rendering for complex websites"""
+    try:
+        url = req.url
+        if not url:
+            return {"error": "Missing 'url'."}
+
+        print(f"DEBUG: Starting enhanced LLM optimization for {url}")
+        
+        # 1. Get enhanced audit data with JavaScript rendering
+        try:
+            audit_result = await enhanced_audit_site(url, max_pages=50, use_js=True)
+            print(f"DEBUG: Enhanced audit completed for {url}")
+        except Exception as audit_error:
+            print(f"DEBUG: Enhanced audit failed for {url}: {audit_error}")
+            # Fallback to regular audit
+            try:
+                audit_result = await audit_site(url, max_pages=50)
+                print(f"DEBUG: Fallback audit completed for {url}")
+            except Exception as fallback_error:
+                print(f"DEBUG: Both audits failed for {url}: {fallback_error}")
+                audit_result = {
+                    "url": url,
+                    "pages": [{"url": url, "title": "", "meta": "", "h1": [], "h2": [], "h3": [], "word_count": 0}],
+                    "languages": ["en"],
+                    "error": f"All audit methods failed: {str(audit_error)}"
+                }
+        
+        # 2. Get base scores with error handling
+        try:
+            scores = score_website(audit_result)
+            print(f"DEBUG: Scoring completed for {url}")
+        except Exception as score_error:
+            print(f"DEBUG: Scoring failed for {url}: {score_error}")
+            scores = {
+                "scores": {
+                    "seo": 0,
+                    "aeo": 0,
+                    "geo": 0,
+                    "accessibility": 0,
+                    "technical": 0,
+                    "overall": 0
+                },
+                "seo_score": 0,
+                "ai_score": 0,
+                "combined_score": 0,
+                "error": f"Scoring failed: {str(score_error)}"
+            }
+        
+        # 3. Generate LLM-powered optimizations with error handling
+        try:
+            llm_optimizations = await optimize_with_llm(audit_result, scores)
+            print(f"DEBUG: Enhanced LLM optimization completed for {url}")
+        except Exception as llm_error:
+            print(f"DEBUG: LLM optimization failed for {url}: {llm_error}")
+            # Fallback to base optimizations
+            try:
+                llm_optimizations = optimize_site(audit_result)
+                print(f"DEBUG: Using base optimizations as fallback for {url}")
+            except Exception as base_error:
+                print(f"DEBUG: Base optimization also failed for {url}: {base_error}")
+                llm_optimizations = {
+                    "pages_optimized": [{
+                        "url": url,
+                        "new_title": "Add a compelling title tag",
+                        "new_meta": "Add a descriptive meta description",
+                        "new_h1": "Add a clear H1 heading",
+                        "fallback": True,
+                        "error": f"All optimization methods failed: {str(llm_error)}"
+                    }],
+                    "error": f"Fallback optimizations provided due to: {str(llm_error)}"
+                }
+        
+        return {
+            "url": url,
+            "audit": audit_result,
+            "scores": scores,
+            "optimize": llm_optimizations
+        }
+        
+    except Exception as e:
+        print(f"DEBUG: Complete enhanced failure for {req.url}: {e}")
+        return {
+            "url": req.url,
+            "audit": {"url": req.url, "pages": [], "error": f"Complete enhanced failure: {str(e)}"},
+            "scores": {"scores": {"overall": 0}, "error": f"Complete enhanced failure: {str(e)}"},
+            "optimize": {"pages_optimized": [], "error": f"Complete enhanced failure: {str(e)}"}
         }
 
 # ---------- /apply-wordpress ----------

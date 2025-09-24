@@ -85,6 +85,7 @@ async def fetch_with_fallback(url: str) -> Dict[str, Any]:
         }
         
         response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+        print(f"DEBUG: Response status: {response.status_code}, URL: {response.url}")
         
         if response.status_code == 200:
             html = response.text

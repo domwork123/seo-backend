@@ -112,6 +112,53 @@ async def fetch_with_fallback(url: str) -> Dict[str, Any]:
         # Step 2: Try Playwright fallback
         return await _fetch_with_playwright(url)
 
+async def _fetch_with_browserless(url: str) -> Dict[str, Any]:
+    """Fetch page using Browserless service - much more reliable for Cloudflare bypass"""
+    try:
+        print(f"DEBUG: Trying Browserless fallback for {url}")
+        
+        # Browserless REST API endpoint
+        browserless_url = "https://chrome.browserless.io/content"
+        
+        payload = {
+            "url": url,
+            "options": {
+                "waitUntil": "networkidle0",
+                "timeout": 30000,
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache"
+        }
+        
+        response = requests.post(
+            browserless_url,
+            json=payload,
+            headers=headers,
+            timeout=60
+        )
+        
+        print(f"DEBUG: Browserless response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            content = response.text
+            print(f"DEBUG: Browserless HTML length: {len(content)}")
+            
+            # Check if content is still blocked
+            if is_blocked_html(content):
+                return {"status": "blocked", "html": content, "error": "Still blocked after Browserless"}
+            else:
+                return {"status": "success", "html": content}
+        else:
+            return {"status": "failed", "html": "", "error": f"Browserless HTTP {response.status_code}"}
+            
+    except Exception as e:
+        print(f"DEBUG: Browserless fallback failed for {url}: {e}")
+        return {"status": "failed", "html": "", "error": str(e)}
+
 async def _fetch_with_playwright(url: str) -> Dict[str, Any]:
     """
     Fetch URL content using Playwright as fallback for protected sites.
@@ -367,14 +414,20 @@ class AEOGeoAuditor:
                 
                 # Check if content is blocked
                 if is_blocked_html(html):
-                    print(f"DEBUG: Content blocked, trying Playwright fallback for {url}")
-                    playwright_result = await _fetch_with_playwright(url)
-                    if playwright_result['status'] == 'success':
-                        html = playwright_result['html']
-                        fetch_method = 'playwright'
+                    print(f"DEBUG: Content blocked, trying Browserless fallback for {url}")
+                    browserless_result = await _fetch_with_browserless(url)
+                    if browserless_result['status'] == 'success':
+                        html = browserless_result['html']
+                        fetch_method = 'browserless'
                     else:
-                        print(f"DEBUG: Playwright also failed for {url}")
-                        return None
+                        print(f"DEBUG: Browserless failed, trying Playwright fallback for {url}")
+                        playwright_result = await _fetch_with_playwright(url)
+                        if playwright_result['status'] == 'success':
+                            html = playwright_result['html']
+                            fetch_method = 'playwright'
+                        else:
+                            print(f"DEBUG: Both Browserless and Playwright failed for {url}")
+                            return None
                 else:
                     fetch_method = 'requests'
                 

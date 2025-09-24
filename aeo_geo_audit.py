@@ -306,11 +306,11 @@ class AEOGeoAuditor:
             
             # Calculate scores for this single page
             scores = {
-                "aeo_score": analyzed_page["aeo_score"],
-                "geo_score": analyzed_page["geo_score"],
+                "aeo_score": analyzed_page["aeo_score"]["score"],
+                "geo_score": analyzed_page["geo_score"]["score"],
                 "overall_score": analyzed_page["overall_score"],
-                "aeo_breakdown": analyzed_page["aeo_breakdown"],
-                "geo_breakdown": analyzed_page["geo_breakdown"]
+                "aeo_breakdown": analyzed_page["aeo_score"],
+                "geo_breakdown": analyzed_page["geo_score"]
             }
             
             # Generate recommendations for this page

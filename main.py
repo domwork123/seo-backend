@@ -14,7 +14,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 from aeo_geo_scoring import score_website
 from aeo_geo_optimizer import detect_faq, extract_images, optimize_meta_description, run_llm_queries, check_geo_signals, generate_blog_post
-from aeo_geo_audit import audit_site_aeo_geo
+from aeo_geo_audit import audit_site_aeo_geo, audit_single_page_aeo_geo
 from audit import audit_site
 from enhanced_audit import enhanced_audit_site
 
@@ -708,6 +708,44 @@ async def audit_aeo_geo(req: AuditRequest = Body(...)):
         print(f"DEBUG: AEO + GEO audit failed for {req.url}: {e}")
         return {
             "error": "AEO + GEO audit failed", 
+            "details": str(e),
+            "url": req.url
+        }
+
+@app.post("/audit-single-page")
+async def audit_single_page(req: AuditRequest = Body(...)):
+    """
+    Single page AEO + GEO audit endpoint.
+    Much simpler and more reliable than full website crawling.
+    """
+    try:
+        url = req.url
+        if not url:
+            return {"error": "Missing 'url'."}
+
+        print(f"DEBUG: Starting single page AEO + GEO audit for {url}")
+        
+        # Get target language from request (default to 'en')
+        target_language = getattr(req, 'language', 'en')
+        
+        print(f"DEBUG: Parameters - language: {target_language}")
+        
+        # Run single page AEO + GEO audit
+        audit_result = await audit_single_page_aeo_geo(url, target_language)
+        
+        print(f"DEBUG: Single page audit completed for {url}")
+        
+        return {
+            "url": url,
+            "audit": audit_result,
+            "audit_type": "AEO + GEO Single Page",
+            "target_language": target_language
+        }
+        
+    except Exception as e:
+        print(f"DEBUG: Single page audit failed for {req.url}: {e}")
+        return {
+            "error": "Single page audit failed", 
             "details": str(e),
             "url": req.url
         }

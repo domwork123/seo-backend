@@ -283,8 +283,169 @@ class AEOGeoAuditor:
                 "audit_type": "AEO + GEO Focused"
             }
 
+    async def audit_single_page(self, url: str, language: str = "en") -> Dict[str, Any]:
+        """Audit a single page - much simpler and more reliable"""
+        try:
+            print(f"DEBUG: Starting single page AEO + GEO audit for {url}")
+            
+            # Fetch the single page
+            page_data = await self._fetch_single_page(url)
+            
+            if not page_data:
+                return {
+                    "success": False,
+                    "error": "Could not fetch the page",
+                    "url": url,
+                    "audit_type": "AEO + GEO Single Page"
+                }
+            
+            print(f"DEBUG: Successfully fetched page: {url}")
+            
+            # Analyze the page
+            analyzed_page = await self._analyze_page(page_data, language)
+            
+            # Calculate scores for this single page
+            scores = {
+                "aeo_score": analyzed_page["aeo_score"],
+                "geo_score": analyzed_page["geo_score"],
+                "overall_score": analyzed_page["overall_score"],
+                "aeo_breakdown": analyzed_page["aeo_breakdown"],
+                "geo_breakdown": analyzed_page["geo_breakdown"]
+            }
+            
+            # Generate recommendations for this page
+            recommendations = self._generate_single_page_recommendations(analyzed_page)
+            
+            # Detect platform
+            platform = self._detect_platform([page_data])
+            
+            result = {
+                "success": True,
+                "url": url,
+                "platform": platform,
+                "language": language,
+                "scores": scores,
+                "page_analysis": analyzed_page,
+                "recommendations": recommendations,
+                "fetch_method": page_data.get("fetch_method", "requests"),
+                "fetch_status": page_data.get("fetch_status", "success"),
+                "audit_type": "AEO + GEO Single Page"
+            }
+            
+            print(f"DEBUG: Single page audit completed for {url}")
+            return result
+            
+        except Exception as e:
+            print(f"DEBUG: Single page audit failed: {e}")
+            return {
+                "success": False,
+                "error": f"Single page audit failed: {str(e)}",
+                "url": url,
+                "audit_type": "AEO + GEO Single Page"
+            }
+
+    async def _fetch_single_page(self, url: str) -> Optional[Dict[str, Any]]:
+        """Fetch a single page with fallback to Playwright if needed"""
+        try:
+            print(f"DEBUG: Fetching single page: {url}")
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+            print(f"DEBUG: Response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                html = response.text
+                print(f"DEBUG: HTML length: {len(html)}")
+                
+                # Check if content is blocked
+                if is_blocked_html(html):
+                    print(f"DEBUG: Content blocked, trying Playwright fallback for {url}")
+                    playwright_result = await _fetch_with_playwright(url)
+                    if playwright_result['status'] == 'success':
+                        html = playwright_result['html']
+                        fetch_method = 'playwright'
+                    else:
+                        print(f"DEBUG: Playwright also failed for {url}")
+                        return None
+                else:
+                    fetch_method = 'requests'
+                
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                return {
+                    "url": url,
+                    "html": html,
+                    "soup": soup,
+                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
+                    "meta_description": self._extract_meta_description(soup),
+                    "lang": soup.find('html', {}).get('lang', ''),
+                    "fetch_method": fetch_method,
+                    "fetch_status": 'success'
+                }
+            else:
+                print(f"DEBUG: HTTP {response.status_code} for {url}")
+                return None
+                
+        except Exception as e:
+            print(f"DEBUG: Error fetching {url}: {e}")
+            return None
+
+    def _generate_single_page_recommendations(self, page_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate recommendations for a single page"""
+        recommendations = []
+        
+        # AEO recommendations
+        aeo_breakdown = page_analysis.get("aeo_breakdown", {})
+        if aeo_breakdown.get("faq_content", {}).get("score", 0) < 50:
+            recommendations.append({
+                "category": "AEO",
+                "priority": "high",
+                "title": "Add FAQ Content",
+                "description": "This page lacks FAQ content. Add Q&A sections to improve answer engine optimization.",
+                "action": "Create FAQ sections with common questions and answers"
+            })
+        
+        if aeo_breakdown.get("meta_description", {}).get("score", 0) < 50:
+            recommendations.append({
+                "category": "AEO", 
+                "priority": "medium",
+                "title": "Optimize Meta Description",
+                "description": "Meta description needs optimization for featured snippets.",
+                "action": "Write concise, descriptive meta descriptions (150-160 characters)"
+            })
+        
+        # GEO recommendations
+        geo_breakdown = page_analysis.get("geo_breakdown", {})
+        if geo_breakdown.get("hreflang", {}).get("score", 0) < 50:
+            recommendations.append({
+                "category": "GEO",
+                "priority": "high", 
+                "title": "Add Hreflang Tags",
+                "description": "Missing hreflang tags for geographic targeting.",
+                "action": "Add hreflang attributes to specify language and region targeting"
+            })
+        
+        if geo_breakdown.get("local_schema", {}).get("score", 0) < 50:
+            recommendations.append({
+                "category": "GEO",
+                "priority": "medium",
+                "title": "Add Local Business Schema",
+                "description": "Missing LocalBusiness structured data for local SEO.",
+                "action": "Add LocalBusiness schema markup with NAP (Name, Address, Phone) information"
+            })
+        
+        return recommendations
+
     async def _crawl_website(self, root_url: str, max_pages: int) -> Dict[str, Any]:
-        """Crawl website and collect all internal pages"""
+        """Crawl website and collect all internal pages - SIMPLE WORKING VERSION"""
         domain = urlparse(root_url).netloc
         to_crawl = [root_url]
         crawled_pages = []
@@ -292,91 +453,77 @@ class AEOGeoAuditor:
         
         print(f"DEBUG: Starting crawl for {root_url}, max_pages: {max_pages}")
         
-        while to_crawl and len(crawled_pages) < max_pages:
-            current_url = to_crawl.pop(0)
+        # Simple approach - just try to fetch the main page
+        try:
+            print(f"DEBUG: Fetching {root_url}")
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
             
-            if current_url in self.visited_urls:
-                continue
+            response = requests.get(root_url, headers=headers, timeout=30, allow_redirects=True)
+            print(f"DEBUG: Response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                html = response.text
+                print(f"DEBUG: HTML length: {len(html)}")
                 
-            self.visited_urls.add(current_url)
-            print(f"DEBUG: Crawling {current_url}")
-            
-            # Add delay between requests to be respectful
-            if len(crawled_pages) > 0:
-                await asyncio.sleep(0.5)
-            
-            try:
-                # Simple, direct fetch approach
-                print(f"DEBUG: Attempting to fetch {current_url}")
+                soup = BeautifulSoup(html, 'html.parser')
                 
-                # Try direct requests first
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
+                # Extract page data
+                page_data = {
+                    "url": root_url,
+                    "html": html,
+                    "soup": soup,
+                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
+                    "meta_description": self._extract_meta_description(soup),
+                    "lang": soup.find('html', {}).get('lang', ''),
+                    "fetch_method": 'requests',
+                    "fetch_status": 'success'
                 }
                 
-                response = requests.get(current_url, headers=headers, timeout=30, allow_redirects=True)
-                print(f"DEBUG: Response status: {response.status_code}, URL: {response.url}")
+                crawled_pages.append(page_data)
+                print(f"DEBUG: Successfully crawled page: {root_url}")
                 
-                if response.status_code == 200:
-                    html = response.text
-                    print(f"DEBUG: HTML length: {len(html)}")
-                    
-                    # Check if content is blocked
-                    if is_blocked_html(html):
-                        print(f"DEBUG: Content blocked, trying Playwright fallback for {current_url}")
-                        # Try Playwright fallback
-                        playwright_result = await _fetch_with_playwright(current_url)
-                        if playwright_result['status'] == 'success':
-                            html = playwright_result['html']
-                            fetch_method = 'playwright'
-                        else:
-                            error_msg = f"Both requests and Playwright failed for {current_url}"
-                            print(f"DEBUG: {error_msg}")
-                            errors.append(error_msg)
+                # Find internal links for additional pages
+                internal_links = self._extract_internal_links(soup, root_url, domain)
+                print(f"DEBUG: Found {len(internal_links)} internal links")
+                
+                # Try to crawl a few more pages
+                for link in internal_links[:max_pages-1]:
+                    if link not in self.visited_urls:
+                        try:
+                            print(f"DEBUG: Fetching additional page: {link}")
+                            response = requests.get(link, headers=headers, timeout=30, allow_redirects=True)
+                            if response.status_code == 200:
+                                html = response.text
+                                soup = BeautifulSoup(html, 'html.parser')
+                                
+                                page_data = {
+                                    "url": link,
+                                    "html": html,
+                                    "soup": soup,
+                                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
+                                    "meta_description": self._extract_meta_description(soup),
+                                    "lang": soup.find('html', {}).get('lang', ''),
+                                    "fetch_method": 'requests',
+                                    "fetch_status": 'success'
+                                }
+                                
+                                crawled_pages.append(page_data)
+                                print(f"DEBUG: Successfully crawled additional page: {link}")
+                                
+                                if len(crawled_pages) >= max_pages:
+                                    break
+                        except Exception as e:
+                            print(f"DEBUG: Error fetching {link}: {e}")
                             continue
-                    else:
-                        fetch_method = 'requests'
-                    
-                    soup = BeautifulSoup(html, 'html.parser')
-                    
-                    # Extract page data
-                    page_data = {
-                        "url": current_url,
-                        "html": html,
-                        "soup": soup,
-                        "title": soup.find('title').get_text().strip() if soup.find('title') else "",
-                        "meta_description": self._extract_meta_description(soup),
-                        "lang": soup.find('html', {}).get('lang', ''),
-                        "fetch_method": fetch_method,
-                        "fetch_status": 'success'
-                    }
-                    
-                    crawled_pages.append(page_data)
-                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url} (method: {fetch_method})")
-                    
-                    # Find internal links
-                    internal_links = self._extract_internal_links(soup, current_url, domain)
-                    print(f"DEBUG: Found {len(internal_links)} internal links")
-                    for link in internal_links:
-                        if link not in self.visited_urls and link not in to_crawl:
-                            to_crawl.append(link)
-                else:
-                    error_msg = f"HTTP {response.status_code} for {current_url}"
-                    print(f"DEBUG: {error_msg}")
-                    errors.append(error_msg)
-                    continue
-                            
-            except Exception as e:
-                error_msg = f"Error crawling {current_url}: {e}"
-                print(f"DEBUG: {error_msg}")
-                errors.append(error_msg)
-                continue
+            else:
+                print(f"DEBUG: HTTP {response.status_code} for {root_url}")
+                errors.append(f"HTTP {response.status_code} for {root_url}")
+                
+        except Exception as e:
+            print(f"DEBUG: Error crawling {root_url}: {e}")
+            errors.append(f"Error crawling {root_url}: {e}")
         
         print(f"DEBUG: Crawl completed. Pages: {len(crawled_pages)}, Errors: {len(errors)}")
         return {"pages": crawled_pages, "errors": errors}
@@ -1058,6 +1205,11 @@ class AEOGeoAuditor:
         return recommendations
 
 # Main audit function
+async def audit_single_page_aeo_geo(url: str, language: str = "en") -> Dict[str, Any]:
+    """Standalone function to audit a single page"""
+    async with AEOGeoAuditor() as auditor:
+        return await auditor.audit_single_page(url, language)
+
 async def audit_site_aeo_geo(root_url: str, target_language: str = "en", max_pages: int = 100) -> Dict[str, Any]:
     """Main function to audit a site for AEO + GEO optimization"""
     async with AEOGeoAuditor() as auditor:

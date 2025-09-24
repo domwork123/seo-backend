@@ -223,8 +223,10 @@ class AEOGeoAuditor:
         start_time = time.time()
         
         try:
+            print(f"DEBUG: Starting audit for {root_url}")
             # 1. Crawl the website
             crawl_results = await self._crawl_website(root_url, max_pages)
+            print(f"DEBUG: Crawl completed, pages: {len(crawl_results.get('pages', []))}")
             
             # 2. Detect platform
             platform = self._detect_platform(crawl_results['pages'])

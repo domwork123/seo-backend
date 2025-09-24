@@ -80,6 +80,9 @@ def calculate_aeo_score(pages: List[Dict[str, Any]]) -> Tuple[int, List[str]]:
     - Structured data (JSON-LD)
     - Content structure for AI consumption
     """
+    if not pages:
+        return 0, ["No pages to analyze"]
+    
     total_score = 0
     max_score = 0
     tasks = []
@@ -89,34 +92,59 @@ def calculate_aeo_score(pages: List[Dict[str, Any]]) -> Tuple[int, List[str]]:
         page_max = 0
         
         # FAQ Content (25 points)
-        faq_score, faq_tasks = check_faq_content(page)
-        page_score += faq_score
-        page_max += 25
-        tasks.extend(faq_tasks)
+        try:
+            faq_score, faq_tasks = check_faq_content(page)
+            page_score += faq_score
+            page_max += 25
+            if faq_tasks:
+                tasks.extend(faq_tasks)
+        except Exception as e:
+            print(f"DEBUG: FAQ check failed: {e}")
+            page_max += 25
         
         # Meta Description Optimization (20 points)
-        meta_score, meta_tasks = check_meta_descriptions(page)
-        page_score += meta_score
-        page_max += 20
-        tasks.extend(meta_tasks)
+        try:
+            meta_score, meta_tasks = check_meta_descriptions(page)
+            page_score += meta_score
+            page_max += 20
+            if meta_tasks:
+                tasks.extend(meta_tasks)
+        except Exception as e:
+            print(f"DEBUG: Meta check failed: {e}")
+            page_max += 20
         
         # Alt Text Optimization (15 points)
-        alt_score, alt_tasks = check_alt_text(page)
-        page_score += alt_score
-        page_max += 15
-        tasks.extend(alt_tasks)
+        try:
+            alt_score, alt_tasks = check_alt_text(page)
+            page_score += alt_score
+            page_max += 15
+            if alt_tasks:
+                tasks.extend(alt_tasks)
+        except Exception as e:
+            print(f"DEBUG: Alt text check failed: {e}")
+            page_max += 15
         
         # Structured Data (20 points)
-        schema_score, schema_tasks = check_structured_data(page)
-        page_score += schema_score
-        page_max += 20
-        tasks.extend(schema_tasks)
+        try:
+            schema_score, schema_tasks = check_structured_data(page)
+            page_score += schema_score
+            page_max += 20
+            if schema_tasks:
+                tasks.extend(schema_tasks)
+        except Exception as e:
+            print(f"DEBUG: Schema check failed: {e}")
+            page_max += 20
         
         # Content Structure for AI (20 points)
-        content_score, content_tasks = check_ai_content_structure(page)
-        page_score += content_score
-        page_max += 20
-        tasks.extend(content_tasks)
+        try:
+            content_score, content_tasks = check_ai_content_structure(page)
+            page_score += content_score
+            page_max += 20
+            if content_tasks:
+                tasks.extend(content_tasks)
+        except Exception as e:
+            print(f"DEBUG: Content structure check failed: {e}")
+            page_max += 20
         
         total_score += page_score
         max_score += page_max
@@ -136,6 +164,9 @@ def calculate_geo_score(pages: List[Dict[str, Any]], audit_data: Dict[str, Any])
     - Geographic targeting signals
     - Local SEO elements
     """
+    if not pages:
+        return 0, ["No pages to analyze"]
+    
     total_score = 0
     max_score = 0
     tasks = []
@@ -145,34 +176,59 @@ def calculate_geo_score(pages: List[Dict[str, Any]], audit_data: Dict[str, Any])
         page_max = 0
         
         # Hreflang Implementation (25 points)
-        hreflang_score, hreflang_tasks = check_hreflang(page)
-        page_score += hreflang_score
-        page_max += 25
-        tasks.extend(hreflang_tasks)
+        try:
+            hreflang_score, hreflang_tasks = check_hreflang(page)
+            page_score += hreflang_score
+            page_max += 25
+            if hreflang_tasks:
+                tasks.extend(hreflang_tasks)
+        except Exception as e:
+            print(f"DEBUG: Hreflang check failed: {e}")
+            page_max += 25
         
         # LocalBusiness Schema (20 points)
-        local_schema_score, local_schema_tasks = check_local_schema(page)
-        page_score += local_schema_score
-        page_max += 20
-        tasks.extend(local_schema_tasks)
+        try:
+            local_schema_score, local_schema_tasks = check_local_schema(page)
+            page_score += local_schema_score
+            page_max += 20
+            if local_schema_tasks:
+                tasks.extend(local_schema_tasks)
+        except Exception as e:
+            print(f"DEBUG: Local schema check failed: {e}")
+            page_max += 20
         
         # NAP Consistency (20 points)
-        nap_score, nap_tasks = check_nap_consistency(page)
-        page_score += nap_score
-        page_max += 20
-        tasks.extend(nap_tasks)
+        try:
+            nap_score, nap_tasks = check_nap_consistency(page)
+            page_score += nap_score
+            page_max += 20
+            if nap_tasks:
+                tasks.extend(nap_tasks)
+        except Exception as e:
+            print(f"DEBUG: NAP check failed: {e}")
+            page_max += 20
         
         # Geographic Targeting (20 points)
-        geo_targeting_score, geo_targeting_tasks = check_geographic_targeting(page)
-        page_score += geo_targeting_score
-        page_max += 20
-        tasks.extend(geo_targeting_tasks)
+        try:
+            geo_targeting_score, geo_targeting_tasks = check_geographic_targeting(page)
+            page_score += geo_targeting_score
+            page_max += 20
+            if geo_targeting_tasks:
+                tasks.extend(geo_targeting_tasks)
+        except Exception as e:
+            print(f"DEBUG: Geo targeting check failed: {e}")
+            page_max += 20
         
         # Local SEO Elements (15 points)
-        local_seo_score, local_seo_tasks = check_local_seo_elements(page)
-        page_score += local_seo_score
-        page_max += 15
-        tasks.extend(local_seo_tasks)
+        try:
+            local_seo_score, local_seo_tasks = check_local_seo_elements(page)
+            page_score += local_seo_score
+            page_max += 15
+            if local_seo_tasks:
+                tasks.extend(local_seo_tasks)
+        except Exception as e:
+            print(f"DEBUG: Local SEO check failed: {e}")
+            page_max += 15
         
         total_score += page_score
         max_score += page_max

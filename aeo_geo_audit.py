@@ -89,6 +89,7 @@ async def fetch_with_fallback(url: str) -> Dict[str, Any]:
         
         if response.status_code == 200:
             html = response.text
+            print(f"DEBUG: HTML length: {len(html)}")
             
             # Check if content is blocked
             if is_blocked_html(html):

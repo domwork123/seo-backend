@@ -59,6 +59,7 @@ async def fetch_with_fallback(url: str) -> Dict[str, Any]:
     Returns:
         Dict containing 'html', 'status', 'method', and 'error' if applicable
     """
+    print(f"DEBUG: fetch_with_fallback called for {url}")
     result = {
         'html': '',
         'status': 'success',
@@ -68,6 +69,7 @@ async def fetch_with_fallback(url: str) -> Dict[str, Any]:
     
     # Step 1: Try normal requests.get() with realistic browser headers
     try:
+        print(f"DEBUG: Attempting requests.get() for {url}")
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -289,10 +291,12 @@ class AEOGeoAuditor:
             current_url = to_crawl.pop(0)
             
             if current_url in self.visited_urls:
+                print(f"DEBUG: Skipping already visited URL: {current_url}")
                 continue
                 
             self.visited_urls.add(current_url)
             print(f"DEBUG: Crawling {current_url}")
+            print(f"DEBUG: URLs to crawl: {len(to_crawl)}, Pages crawled: {len(crawled_pages)}")
             
             # Add delay between requests to be respectful
             if len(crawled_pages) > 0:

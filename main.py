@@ -14,6 +14,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 from aeo_geo_scoring import score_website
 from aeo_geo_optimizer import detect_faq, extract_images, optimize_meta_description, run_llm_queries, check_geo_signals, generate_blog_post
+from aeo_geo_audit import audit_site_aeo_geo
 from audit import audit_site
 from enhanced_audit import enhanced_audit_site
 
@@ -671,4 +672,41 @@ async def test_llm_queries_endpoint(req: dict = Body(...)):
         
     except Exception as e:
         return {"error": "LLM query testing failed", "details": str(e)}
+
+@app.post("/audit-aeo-geo")
+async def audit_aeo_geo(req: AuditRequest = Body(...)):
+    """
+    AEO + GEO focused audit endpoint.
+    Comprehensive audit engine for Answer Engine Optimization and Geographic Optimization.
+    """
+    try:
+        url = req.url
+        if not url:
+            return {"error": "Missing 'url'."}
+
+        print(f"DEBUG: Starting AEO + GEO audit for {url}")
+        
+        # Get target language from request (default to 'en')
+        target_language = getattr(req, 'language', 'en')
+        max_pages = getattr(req, 'max_pages', 100)
+        
+        # Run comprehensive AEO + GEO audit
+        audit_result = await audit_site_aeo_geo(url, target_language, max_pages)
+        
+        print(f"DEBUG: AEO + GEO audit completed for {url}")
+        
+        return {
+            "url": url,
+            "audit": audit_result,
+            "audit_type": "AEO + GEO Focused",
+            "target_language": target_language
+        }
+        
+    except Exception as e:
+        print(f"DEBUG: AEO + GEO audit failed for {req.url}: {e}")
+        return {
+            "error": "AEO + GEO audit failed", 
+            "details": str(e),
+            "url": req.url
+        }
 

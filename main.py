@@ -12,11 +12,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-from scoring import score_website
-from optimizer import optimize_site
+from aeo_geo_scoring import score_website
+from aeo_geo_optimizer import detect_faq, extract_images, optimize_meta_description, run_llm_queries, check_geo_signals, generate_blog_post
 from audit import audit_site
 from enhanced_audit import enhanced_audit_site
-from llm_optimizer import optimize_with_llm
 
 
 app = FastAPI()
@@ -502,4 +501,174 @@ async def apply_wordpress(req: WordPressApplyRequest = Body(...)):
         
     except Exception as e:
         return {"error": "WordPress apply failed", "details": str(e)}
+
+@app.post("/optimize-aeo-geo")
+async def optimize_aeo_geo(req: AuditRequest = Body(...)):
+    """
+    AEO + GEO focused optimization endpoint.
+    Returns comprehensive AEO and GEO optimization suggestions.
+    """
+    try:
+        url = req.url
+        if not url:
+            return {"error": "Missing 'url'."}
+
+        print(f"DEBUG: Starting AEO + GEO optimization for {url}")
+        
+        # 1. Get audit data
+        try:
+            audit_result = await audit_site(url, max_pages=50)
+            print(f"DEBUG: Audit completed for {url}")
+        except Exception as audit_error:
+            print(f"DEBUG: Audit failed for {url}: {audit_error}")
+            audit_result = {
+                "url": url,
+                "pages": [{"url": url, "title": "", "meta": "", "h1": [], "h2": [], "h3": [], "word_count": 0, "content": "", "images": [], "schema": {"json_ld": []}, "hreflang": [], "nap": {}}],
+                "languages": ["en"],
+                "error": f"Audit failed: {str(audit_error)}"
+            }
+        
+        # 2. Get AEO + GEO scores
+        try:
+            scores = score_website(audit_result)
+            print(f"DEBUG: AEO + GEO scoring completed for {url}")
+        except Exception as score_error:
+            print(f"DEBUG: Scoring failed for {url}: {score_error}")
+            scores = {
+                "scores": {"aeo": 0, "geo": 0, "overall": 0},
+                "aeo_score": 0,
+                "geo_score": 0,
+                "combined_score": 0,
+                "error": f"Scoring failed: {str(score_error)}"
+            }
+        
+        # 3. Generate AEO + GEO optimizations
+        pages_optimized = []
+        
+        for page in audit_result.get("pages", []):
+            page_url = page.get("url", url)
+            
+            # AEO Optimizations
+            faq_analysis = detect_faq(page_url, page)
+            image_analysis = extract_images(page_url, page)
+            meta_optimization = optimize_meta_description(page.get("meta", ""), page)
+            
+            # GEO Optimizations
+            geo_analysis = check_geo_signals(page_url, page)
+            
+            # Combine optimizations
+            page_optimization = {
+                "url": page_url,
+                "page_type": "homepage" if page_url == url else "content",
+                "priority": "high",
+                "aeo_optimization": {
+                    "faq_analysis": faq_analysis,
+                    "image_analysis": image_analysis,
+                    "meta_optimization": meta_optimization,
+                    "suggestions": generate_aeo_suggestions(faq_analysis, image_analysis, meta_optimization)
+                },
+                "geo_optimization": {
+                    "geo_analysis": geo_analysis,
+                    "suggestions": geo_analysis.get("suggestions", [])
+                }
+            }
+            
+            pages_optimized.append(page_optimization)
+        
+        return {
+            "url": url,
+            "audit": audit_result,
+            "scores": scores,
+            "optimize": {
+                "pages_optimized": pages_optimized,
+                "aeo_focus": "Answer Engine Optimization for AI search",
+                "geo_focus": "Geographic Optimization for local targeting"
+            }
+        }
+        
+    except Exception as e:
+        print(f"DEBUG: AEO + GEO optimization failed for {req.url}: {e}")
+        return {
+            "error": "AEO + GEO optimization failed", 
+            "details": str(e),
+            "url": req.url
+        }
+
+def generate_aeo_suggestions(faq_analysis, image_analysis, meta_optimization):
+    """Generate AEO optimization suggestions"""
+    suggestions = []
+    
+    # FAQ suggestions
+    if not faq_analysis.get("has_faq_content"):
+        suggestions.append("Add FAQ section with common customer questions")
+    if not faq_analysis.get("has_faq_schema"):
+        suggestions.append("Add FAQ schema markup (JSON-LD) for better AI understanding")
+    
+    # Image suggestions
+    if image_analysis.get("images_without_alt", 0) > 0:
+        suggestions.append(f"Add alt text to {image_analysis['images_without_alt']} images")
+    
+    # Meta description suggestions
+    suggestions.extend(meta_optimization.get("suggestions", []))
+    
+    return suggestions
+
+@app.post("/generate-blog-post")
+async def generate_blog_post_endpoint(req: dict = Body(...)):
+    """Generate AEO-optimized blog post"""
+    try:
+        keyword = req.get("keyword", "")
+        brand = req.get("brand", "")
+        url = req.get("url", "")
+        
+        if not keyword or not brand:
+            return {"error": "Missing 'keyword' or 'brand' parameter"}
+        
+        # Get page data for context
+        try:
+            audit_result = await audit_site(url, max_pages=1) if url else {"pages": [{"content": "", "title": ""}]}
+            page_data = audit_result.get("pages", [{}])[0] if audit_result.get("pages") else {}
+        except:
+            page_data = {"content": "", "title": ""}
+        
+        blog_post = generate_blog_post(keyword, brand, page_data)
+        
+        return {
+            "keyword": keyword,
+            "brand": brand,
+            "blog_post": blog_post,
+            "aeo_optimized": True
+        }
+        
+    except Exception as e:
+        return {"error": "Blog post generation failed", "details": str(e)}
+
+@app.post("/test-llm-queries")
+async def test_llm_queries_endpoint(req: dict = Body(...)):
+    """Test LLM query visibility"""
+    try:
+        brand = req.get("brand", "")
+        queries = req.get("queries", [])
+        url = req.get("url", "")
+        
+        if not brand:
+            return {"error": "Missing 'brand' parameter"}
+        
+        # Get page data for context
+        try:
+            audit_result = await audit_site(url, max_pages=1) if url else {"pages": [{"content": "", "title": ""}]}
+            page_data = audit_result.get("pages", [{}])[0] if audit_result.get("pages") else {}
+        except:
+            page_data = {"content": "", "title": ""}
+        
+        query_results = run_llm_queries(brand, queries, page_data)
+        
+        return {
+            "brand": brand,
+            "query_results": query_results,
+            "visibility_analysis": "Test your brand's visibility in AI search results"
+        }
+        
+    except Exception as e:
+        return {"error": "LLM query testing failed", "details": str(e)}
 

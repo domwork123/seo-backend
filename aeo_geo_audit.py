@@ -88,6 +88,9 @@ class AEOGeoAuditor:
         domain = urlparse(root_url).netloc
         to_crawl = [root_url]
         crawled_pages = []
+        errors = []
+        
+        print(f"DEBUG: Starting crawl for {root_url}, max_pages: {max_pages}")
         
         while to_crawl and len(crawled_pages) < max_pages:
             current_url = to_crawl.pop(0)
@@ -96,9 +99,12 @@ class AEOGeoAuditor:
                 continue
                 
             self.visited_urls.add(current_url)
+            print(f"DEBUG: Crawling {current_url}")
             
             try:
                 response = await self.session.get(current_url)
+                print(f"DEBUG: Response status: {response.status_code} for {current_url}")
+                
                 if response.status_code == 200:
                     html = response.text
                     soup = BeautifulSoup(html, 'html.parser')
@@ -115,18 +121,25 @@ class AEOGeoAuditor:
                     }
                     
                     crawled_pages.append(page_data)
+                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url}")
                     
                     # Find internal links
                     internal_links = self._extract_internal_links(soup, current_url, domain)
+                    print(f"DEBUG: Found {len(internal_links)} internal links")
                     for link in internal_links:
                         if link not in self.visited_urls and link not in to_crawl:
                             to_crawl.append(link)
+                else:
+                    errors.append(f"HTTP {response.status_code} for {current_url}")
                             
             except Exception as e:
-                print(f"Error crawling {current_url}: {e}")
+                error_msg = f"Error crawling {current_url}: {e}"
+                print(f"DEBUG: {error_msg}")
+                errors.append(error_msg)
                 continue
         
-        return {"pages": crawled_pages}
+        print(f"DEBUG: Crawl completed. Pages: {len(crawled_pages)}, Errors: {len(errors)}")
+        return {"pages": crawled_pages, "errors": errors}
 
     def _extract_internal_links(self, soup: BeautifulSoup, current_url: str, domain: str) -> List[str]:
         """Extract internal links from page"""
@@ -135,15 +148,24 @@ class AEOGeoAuditor:
         
         for link in soup.find_all('a', href=True):
             href = link['href']
-            full_url = urljoin(current_url, href)
-            parsed_url = urlparse(full_url)
             
-            # Only include internal links
-            if parsed_url.netloc == base_domain:
-                # Clean URL (remove fragments and query params for deduplication)
-                clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-                if clean_url not in self.visited_urls:
-                    links.append(clean_url)
+            # Skip javascript, mailto, tel, etc.
+            if href.startswith(('javascript:', 'mailto:', 'tel:', '#', 'data:')):
+                continue
+                
+            try:
+                full_url = urljoin(current_url, href)
+                parsed_url = urlparse(full_url)
+                
+                # Only include internal links
+                if parsed_url.netloc == base_domain:
+                    # Clean URL (remove fragments and query params for deduplication)
+                    clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+                    if clean_url not in self.visited_urls and clean_url not in links:
+                        links.append(clean_url)
+            except Exception as e:
+                print(f"DEBUG: Error processing link {href}: {e}")
+                continue
         
         return links
 

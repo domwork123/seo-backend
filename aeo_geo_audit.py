@@ -26,10 +26,20 @@ class AEOGeoAuditor:
         
     async def __aenter__(self):
         self.session = httpx.AsyncClient(
-            timeout=30.0,
+            timeout=60.0,
             follow_redirects=True,
             headers={
-                'User-Agent': 'EVIKA-AEO-GEO-Auditor/1.0 (SEO Analysis Tool)'
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Cache-Control': 'max-age=0'
             }
         )
         return self
@@ -107,12 +117,43 @@ class AEOGeoAuditor:
             self.visited_urls.add(current_url)
             print(f"DEBUG: Crawling {current_url}")
             
+            # Add delay between requests to be respectful
+            if len(crawled_pages) > 0:
+                await asyncio.sleep(0.5)
+            
             try:
-                response = await self.session.get(current_url)
-                print(f"DEBUG: Response status: {response.status_code} for {current_url}")
+                # Retry logic for protected websites
+                response = None
+                for attempt in range(3):
+                    try:
+                        response = await self.session.get(current_url)
+                        print(f"DEBUG: Response status: {response.status_code} for {current_url} (attempt {attempt + 1})")
+                        
+                        if response.status_code == 200:
+                            break
+                        elif response.status_code in [429, 503, 502, 504]:
+                            # Rate limited or server error, wait and retry
+                            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                            continue
+                        else:
+                            break
+                    except Exception as retry_error:
+                        if attempt < 2:
+                            print(f"DEBUG: Retry {attempt + 1} for {current_url}: {retry_error}")
+                            await asyncio.sleep(1)
+                            continue
+                        else:
+                            raise retry_error
                 
-                if response.status_code == 200:
+                if response and response.status_code == 200:
                     html = response.text
+                    
+                    # Check for Cloudflare protection
+                    if 'cloudflare' in html.lower() or 'checking your browser' in html.lower():
+                        print(f"DEBUG: Cloudflare protection detected for {current_url}")
+                        errors.append(f"Cloudflare protection detected for {current_url}")
+                        continue
+                    
                     soup = BeautifulSoup(html, 'html.parser')
                     
                     # Extract page data
@@ -136,7 +177,8 @@ class AEOGeoAuditor:
                         if link not in self.visited_urls and link not in to_crawl:
                             to_crawl.append(link)
                 else:
-                    errors.append(f"HTTP {response.status_code} for {current_url}")
+                    status_code = response.status_code if response else "No response"
+                    errors.append(f"HTTP {status_code} for {current_url}")
                             
             except Exception as e:
                 error_msg = f"Error crawling {current_url}: {e}"

@@ -53,10 +53,16 @@ class AEOGeoAuditor:
             
             # 3. Analyze each page for AEO + GEO signals
             analyzed_pages = []
-            for page_data in crawl_results['pages']:
+            print(f"DEBUG: Analyzing {len(crawl_results['pages'])} crawled pages")
+            for i, page_data in enumerate(crawl_results['pages']):
+                print(f"DEBUG: Analyzing page {i+1}: {page_data.get('url', 'unknown')}")
                 if page_data.get('html'):
+                    print(f"DEBUG: Page has HTML content, length: {len(page_data.get('html', ''))}")
                     analysis = await self._analyze_page(page_data, target_language)
                     analyzed_pages.append(analysis)
+                    print(f"DEBUG: Analysis completed for page {i+1}")
+                else:
+                    print(f"DEBUG: Page {i+1} has no HTML content")
             
             # 4. Calculate scores
             scores = self._calculate_scores(analyzed_pages)

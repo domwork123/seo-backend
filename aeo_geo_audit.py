@@ -100,6 +100,7 @@ async def fetch_with_fallback(url: str) -> Dict[str, Any]:
                 result['html'] = html
                 result['status'] = 'success'
                 result['method'] = 'requests'
+                print(f"DEBUG: Successfully fetched with requests: {len(html)} chars")
                 return result
         else:
             print(f"DEBUG: HTTP {response.status_code} for {url}, trying Playwright fallback")
@@ -290,28 +291,24 @@ class AEOGeoAuditor:
         errors = []
         
         print(f"DEBUG: Starting crawl for {root_url}, max_pages: {max_pages}")
-        print(f"DEBUG: Initial to_crawl: {to_crawl}")
-        print(f"DEBUG: Initial crawled_pages: {len(crawled_pages)}")
         
         while to_crawl and len(crawled_pages) < max_pages:
-            print(f"DEBUG: Entering while loop - to_crawl: {len(to_crawl)}, crawled_pages: {len(crawled_pages)}, max_pages: {max_pages}")
             current_url = to_crawl.pop(0)
             
             if current_url in self.visited_urls:
-                print(f"DEBUG: Skipping already visited URL: {current_url}")
                 continue
                 
             self.visited_urls.add(current_url)
             print(f"DEBUG: Crawling {current_url}")
-            print(f"DEBUG: URLs to crawl: {len(to_crawl)}, Pages crawled: {len(crawled_pages)}")
             
             # Add delay between requests to be respectful
             if len(crawled_pages) > 0:
                 await asyncio.sleep(0.5)
             
             try:
-                # Use the new fallback system
+                # Direct fetch with proper error handling
                 fetch_result = await fetch_with_fallback(current_url)
+                print(f"DEBUG: Fetch result for {current_url}: {fetch_result['status']}")
                 
                 if fetch_result['status'] == 'success':
                     html = fetch_result['html']
@@ -330,7 +327,7 @@ class AEOGeoAuditor:
                     }
                     
                     crawled_pages.append(page_data)
-                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url} (method: {fetch_result['method']})")
+                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url}")
                     
                     # Find internal links
                     internal_links = self._extract_internal_links(soup, current_url, domain)

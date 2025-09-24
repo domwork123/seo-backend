@@ -210,7 +210,7 @@ class AEOGeoAuditor:
         # GEO Analysis  
         geo_signals = self._analyze_geo_signals(soup, url)
         
-        # Calculate page scores
+        # Calculate page scores with detailed breakdown
         aeo_score = self._calculate_aeo_score(aeo_signals)
         geo_score = self._calculate_geo_score(geo_signals)
         
@@ -223,7 +223,7 @@ class AEOGeoAuditor:
             "geo_signals": geo_signals,
             "aeo_score": aeo_score,
             "geo_score": geo_score,
-            "overall_score": (aeo_score + geo_score) / 2
+            "overall_score": (aeo_score['score'] + geo_score['score']) / 2
         }
 
     def _analyze_aeo_signals(self, soup: BeautifulSoup, target_language: str) -> Dict[str, Any]:
@@ -564,103 +564,260 @@ class AEOGeoAuditor:
         parsed = urlparse(url)
         return tldextract.extract(parsed.netloc).suffix
 
-    def _calculate_aeo_score(self, aeo_signals: Dict[str, Any]) -> int:
-        """Calculate AEO score for a page"""
+    def _calculate_aeo_score(self, aeo_signals: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate AEO score for a page with detailed breakdown"""
         score = 0
+        breakdown = {
+            "faq_content": {"score": 0, "max": 25, "present": False, "details": ""},
+            "faq_schema": {"score": 0, "max": 20, "present": False, "details": ""},
+            "other_schemas": {"score": 0, "max": 15, "present": False, "details": ""},
+            "meta_description": {"score": 0, "max": 20, "present": False, "details": ""},
+            "snippet_suitability": {"score": 0, "max": 10, "present": False, "details": ""},
+            "question_headings": {"score": 0, "max": 10, "present": False, "details": ""}
+        }
         
         # FAQ content (25 points)
         if aeo_signals['faq_content']['has_faq_content']:
-            score += 15
+            breakdown["faq_content"]["score"] += 15
+            breakdown["faq_content"]["present"] = True
+            breakdown["faq_content"]["details"] = f"Found {aeo_signals['faq_content']['count']} Q&A pairs"
         if aeo_signals['faq_content']['count'] > 0:
-            score += min(10, aeo_signals['faq_content']['count'] * 2)
+            breakdown["faq_content"]["score"] += min(10, aeo_signals['faq_content']['count'] * 2)
         
         # FAQ schema (20 points)
         if aeo_signals['faq_schema']['has_faq_schema']:
-            score += 20
+            breakdown["faq_schema"]["score"] = 20
+            breakdown["faq_schema"]["present"] = True
+            breakdown["faq_schema"]["details"] = f"Found {aeo_signals['faq_schema']['count']} FAQ schemas"
         
         # Other schemas (15 points)
         if aeo_signals['other_schemas']['count'] > 0:
-            score += min(15, aeo_signals['other_schemas']['count'] * 3)
+            breakdown["other_schemas"]["score"] = min(15, aeo_signals['other_schemas']['count'] * 3)
+            breakdown["other_schemas"]["present"] = True
+            breakdown["other_schemas"]["details"] = f"Found schemas: {', '.join(aeo_signals['other_schemas']['types'])}"
         
         # Meta description (20 points)
         meta_desc = aeo_signals['meta_description']
         if meta_desc['exists']:
-            score += 10
+            breakdown["meta_description"]["score"] += 10
+            breakdown["meta_description"]["present"] = True
+            breakdown["meta_description"]["details"] = f"Meta description exists ({meta_desc['length']} chars)"
         if meta_desc['optimal_length']:
-            score += 10
+            breakdown["meta_description"]["score"] += 10
+            breakdown["meta_description"]["details"] += " - Optimal length"
+        elif meta_desc['exists']:
+            breakdown["meta_description"]["details"] += " - Length not optimal"
         
         # Snippet suitability (10 points)
         snippet_score = aeo_signals['snippet_suitability']['snippet_score']
-        score += min(10, snippet_score // 10)
+        breakdown["snippet_suitability"]["score"] = min(10, snippet_score // 10)
+        if breakdown["snippet_suitability"]["score"] > 0:
+            breakdown["snippet_suitability"]["present"] = True
+            breakdown["snippet_suitability"]["details"] = f"Snippet score: {snippet_score}"
         
         # Question headings (10 points)
         if aeo_signals['question_headings']['count'] > 0:
-            score += min(10, aeo_signals['question_headings']['count'] * 2)
+            breakdown["question_headings"]["score"] = min(10, aeo_signals['question_headings']['count'] * 2)
+            breakdown["question_headings"]["present"] = True
+            breakdown["question_headings"]["details"] = f"Found {aeo_signals['question_headings']['count']} question headings"
         
-        return min(100, score)
+        # Calculate total score
+        for signal in breakdown.values():
+            score += signal["score"]
+        
+        return {
+            "score": min(100, score),
+            "breakdown": breakdown,
+            "signals_present": sum(1 for s in breakdown.values() if s["present"]),
+            "signals_total": len(breakdown)
+        }
 
-    def _calculate_geo_score(self, geo_signals: Dict[str, Any]) -> int:
-        """Calculate GEO score for a page"""
+    def _calculate_geo_score(self, geo_signals: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate GEO score for a page with detailed breakdown"""
         score = 0
+        breakdown = {
+            "hreflang_tags": {"score": 0, "max": 25, "present": False, "details": ""},
+            "local_business_schema": {"score": 0, "max": 25, "present": False, "details": ""},
+            "nap_consistency": {"score": 0, "max": 25, "present": False, "details": ""},
+            "geo_meta_tags": {"score": 0, "max": 15, "present": False, "details": ""},
+            "map_embeds": {"score": 0, "max": 10, "present": False, "details": ""}
+        }
         
         # Hreflang tags (25 points)
         hreflang_count = geo_signals['hreflang_tags']['count']
-        score += min(25, hreflang_count * 5)
+        breakdown["hreflang_tags"]["score"] = min(25, hreflang_count * 5)
+        if hreflang_count > 0:
+            breakdown["hreflang_tags"]["present"] = True
+            breakdown["hreflang_tags"]["details"] = f"Found {hreflang_count} hreflang tags"
         
         # LocalBusiness schema (25 points)
         if geo_signals['local_business_schema']['has_local_business']:
-            score += 25
+            breakdown["local_business_schema"]["score"] = 25
+            breakdown["local_business_schema"]["present"] = True
+            breakdown["local_business_schema"]["details"] = f"Found {geo_signals['local_business_schema']['count']} LocalBusiness schemas"
         
         # NAP consistency (25 points)
-        if geo_signals['nap_consistency']['is_consistent']:
-            score += 25
+        nap_consistency = geo_signals['nap_consistency']
+        if nap_consistency['is_consistent']:
+            breakdown["nap_consistency"]["score"] = 25
+            breakdown["nap_consistency"]["present"] = True
+            breakdown["nap_consistency"]["details"] = "NAP data is consistent"
         else:
-            score += geo_signals['nap_consistency']['consistency_score'] // 4
+            breakdown["nap_consistency"]["score"] = nap_consistency['consistency_score'] // 4
+            breakdown["nap_consistency"]["present"] = True
+            breakdown["nap_consistency"]["details"] = f"NAP consistency: {nap_consistency['consistency_score']}%"
         
         # Geo meta tags (15 points)
-        if geo_signals['geo_meta_tags']['count'] > 0:
-            score += min(15, geo_signals['geo_meta_tags']['count'] * 5)
+        geo_meta_count = geo_signals['geo_meta_tags']['count']
+        if geo_meta_count > 0:
+            breakdown["geo_meta_tags"]["score"] = min(15, geo_meta_count * 5)
+            breakdown["geo_meta_tags"]["present"] = True
+            breakdown["geo_meta_tags"]["details"] = f"Found {geo_meta_count} geo meta tags"
         
         # Map embeds (10 points)
-        if geo_signals['map_embeds']['count'] > 0:
-            score += 10
+        map_count = geo_signals['map_embeds']['count']
+        if map_count > 0:
+            breakdown["map_embeds"]["score"] = 10
+            breakdown["map_embeds"]["present"] = True
+            breakdown["map_embeds"]["details"] = f"Found {map_count} map embeds"
         
-        return min(100, score)
-
-    def _calculate_scores(self, analyzed_pages: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate overall site scores"""
-        if not analyzed_pages:
-            return {"aeo": 0, "geo": 0, "overall": 0}
-        
-        aeo_scores = [page['aeo_score'] for page in analyzed_pages]
-        geo_scores = [page['geo_score'] for page in analyzed_pages]
+        # Calculate total score
+        for signal in breakdown.values():
+            score += signal["score"]
         
         return {
-            "aeo": int(sum(aeo_scores) / len(aeo_scores)),
-            "geo": int(sum(geo_scores) / len(geo_scores)),
-            "overall": int((sum(aeo_scores) + sum(geo_scores)) / (len(aeo_scores) * 2))
+            "score": min(100, score),
+            "breakdown": breakdown,
+            "signals_present": sum(1 for s in breakdown.values() if s["present"]),
+            "signals_total": len(breakdown)
         }
 
-    def _generate_recommendations(self, analyzed_pages: List[Dict[str, Any]], scores: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Generate AEO + GEO recommendations"""
+    def _calculate_scores(self, analyzed_pages: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculate overall site scores with detailed breakdown"""
+        if not analyzed_pages:
+            return {
+                "aeo": 0, 
+                "geo": 0, 
+                "overall": 0,
+                "page_count": 0,
+                "aeo_breakdown": {},
+                "geo_breakdown": {}
+            }
+        
+        # Extract scores from detailed scoring format
+        aeo_scores = [page['aeo_score']['score'] for page in analyzed_pages]
+        geo_scores = [page['geo_score']['score'] for page in analyzed_pages]
+        
+        # Calculate site-level scores
+        site_aeo = int(sum(aeo_scores) / len(aeo_scores))
+        site_geo = int(sum(geo_scores) / len(geo_scores))
+        site_overall = int((site_aeo + site_geo) / 2)
+        
+        # Calculate signal coverage across all pages
+        aeo_breakdown = self._calculate_site_breakdown(analyzed_pages, 'aeo')
+        geo_breakdown = self._calculate_site_breakdown(analyzed_pages, 'geo')
+        
+        return {
+            "aeo": site_aeo,
+            "geo": site_geo,
+            "overall": site_overall,
+            "page_count": len(analyzed_pages),
+            "aeo_breakdown": aeo_breakdown,
+            "geo_breakdown": geo_breakdown
+        }
+    
+    def _calculate_site_breakdown(self, analyzed_pages: List[Dict[str, Any]], score_type: str) -> Dict[str, Any]:
+        """Calculate site-level signal breakdown"""
+        if not analyzed_pages:
+            return {}
+        
+        # Collect all signals across all pages
+        all_signals = {}
+        for page in analyzed_pages:
+            page_breakdown = page[f'{score_type}_score']['breakdown']
+            for signal_name, signal_data in page_breakdown.items():
+                if signal_name not in all_signals:
+                    all_signals[signal_name] = {
+                        "pages_with_signal": 0,
+                        "total_pages": len(analyzed_pages),
+                        "total_score": 0,
+                        "max_possible": signal_data["max"]
+                    }
+                
+                if signal_data["present"]:
+                    all_signals[signal_name]["pages_with_signal"] += 1
+                all_signals[signal_name]["total_score"] += signal_data["score"]
+        
+        # Calculate percentages and coverage
+        for signal_name, signal_data in all_signals.items():
+            signal_data["coverage_percentage"] = int((signal_data["pages_with_signal"] / signal_data["total_pages"]) * 100)
+            signal_data["average_score"] = int(signal_data["total_score"] / signal_data["total_pages"])
+            signal_data["strength"] = "strong" if signal_data["coverage_percentage"] >= 80 else "moderate" if signal_data["coverage_percentage"] >= 50 else "weak"
+        
+        return all_signals
+
+    def _generate_recommendations(self, analyzed_pages: List[Dict[str, Any]], scores: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate AEO + GEO recommendations based on detailed scoring"""
         recommendations = {
             "aeo": [],
-            "geo": []
+            "geo": [],
+            "priority": [],
+            "quick_wins": []
         }
         
-        # AEO recommendations
-        if scores['aeo'] < 50:
-            recommendations["aeo"].append("Add FAQ sections with common customer questions")
-            recommendations["aeo"].append("Implement FAQ schema markup (JSON-LD)")
-            recommendations["aeo"].append("Optimize meta descriptions for featured snippets")
-            recommendations["aeo"].append("Add question-style headings (What, How, Why)")
+        # AEO recommendations based on site-level breakdown
+        aeo_breakdown = scores.get('aeo_breakdown', {})
+        for signal_name, signal_data in aeo_breakdown.items():
+            if signal_data['coverage_percentage'] < 50:
+                if signal_name == 'faq_content':
+                    recommendations["aeo"].append("Add FAQ sections with common customer questions")
+                elif signal_name == 'faq_schema':
+                    recommendations["aeo"].append("Implement FAQ schema markup (JSON-LD)")
+                elif signal_name == 'meta_description':
+                    recommendations["aeo"].append("Optimize meta descriptions for featured snippets")
+                elif signal_name == 'question_headings':
+                    recommendations["aeo"].append("Add question-style headings (What, How, Why)")
+                elif signal_name == 'other_schemas':
+                    recommendations["aeo"].append("Add structured data markup (HowTo, Product, Organization)")
+                elif signal_name == 'snippet_suitability':
+                    recommendations["aeo"].append("Improve content structure for featured snippets")
         
-        # GEO recommendations
-        if scores['geo'] < 50:
-            recommendations["geo"].append("Implement hreflang tags for multilingual targeting")
-            recommendations["geo"].append("Add LocalBusiness schema markup")
-            recommendations["geo"].append("Ensure NAP (Name, Address, Phone) consistency")
-            recommendations["geo"].append("Add geographic meta tags and map embeds")
+        # GEO recommendations based on site-level breakdown
+        geo_breakdown = scores.get('geo_breakdown', {})
+        for signal_name, signal_data in geo_breakdown.items():
+            if signal_data['coverage_percentage'] < 50:
+                if signal_name == 'hreflang_tags':
+                    recommendations["geo"].append("Implement hreflang tags for multilingual targeting")
+                elif signal_name == 'local_business_schema':
+                    recommendations["geo"].append("Add LocalBusiness schema markup")
+                elif signal_name == 'nap_consistency':
+                    recommendations["geo"].append("Ensure NAP (Name, Address, Phone) consistency")
+                elif signal_name == 'geo_meta_tags':
+                    recommendations["geo"].append("Add geographic meta tags")
+                elif signal_name == 'map_embeds':
+                    recommendations["geo"].append("Add map embeds for location visibility")
+        
+        # Priority recommendations (lowest scoring signals)
+        if aeo_breakdown:
+            weakest_aeo = min(aeo_breakdown.items(), key=lambda x: x[1]['coverage_percentage'])
+            if weakest_aeo[1]['coverage_percentage'] < 30:
+                recommendations["priority"].append(f"Priority: Improve {weakest_aeo[0].replace('_', ' ')} (only {weakest_aeo[1]['coverage_percentage']}% coverage)")
+        
+        if geo_breakdown:
+            weakest_geo = min(geo_breakdown.items(), key=lambda x: x[1]['coverage_percentage'])
+            if weakest_geo[1]['coverage_percentage'] < 30:
+                recommendations["priority"].append(f"Priority: Improve {weakest_geo[0].replace('_', ' ')} (only {weakest_geo[1]['coverage_percentage']}% coverage)")
+        
+        # Quick wins (signals that are easy to implement)
+        quick_wins = []
+        if scores.get('aeo', 0) < 70:
+            quick_wins.append("Add meta descriptions to pages missing them")
+            quick_wins.append("Add question-style headings to key pages")
+        if scores.get('geo', 0) < 70:
+            quick_wins.append("Add hreflang tags to homepage")
+            quick_wins.append("Add LocalBusiness schema to contact page")
+        
+        recommendations["quick_wins"] = quick_wins
         
         return recommendations
 

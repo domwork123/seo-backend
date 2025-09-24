@@ -307,11 +307,13 @@ class AEOGeoAuditor:
             
             try:
                 # Direct fetch with proper error handling
+                print(f"DEBUG: Attempting to fetch {current_url}")
                 fetch_result = await fetch_with_fallback(current_url)
                 print(f"DEBUG: Fetch result for {current_url}: {fetch_result['status']}")
                 
                 if fetch_result['status'] == 'success':
                     html = fetch_result['html']
+                    print(f"DEBUG: HTML length: {len(html)}")
                     soup = BeautifulSoup(html, 'html.parser')
                     
                     # Extract page data

@@ -690,10 +690,12 @@ async def audit_aeo_geo(req: AuditRequest = Body(...)):
         target_language = getattr(req, 'language', 'en')
         max_pages = getattr(req, 'max_pages', 100)
         
+        print(f"DEBUG: Parameters - language: {target_language}, max_pages: {max_pages}")
+        
         # Run comprehensive AEO + GEO audit
         audit_result = await audit_site_aeo_geo(url, target_language, max_pages)
         
-        print(f"DEBUG: AEO + GEO audit completed for {url}")
+        print(f"DEBUG: AEO + GEO audit completed for {url}, pages: {audit_result.get('pages_analyzed', 0)}")
         
         return {
             "url": url,

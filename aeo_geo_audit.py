@@ -424,7 +424,9 @@ class AEOGeoAuditor:
             "geo_signals": geo_signals,
             "aeo_score": aeo_score,
             "geo_score": geo_score,
-            "overall_score": (aeo_score['score'] + geo_score['score']) / 2
+            "overall_score": (aeo_score['score'] + geo_score['score']) / 2,
+            "fetch_method": page_data.get('fetch_method', 'unknown'),
+            "fetch_status": page_data.get('fetch_status', 'unknown')
         }
 
     def _analyze_aeo_signals(self, soup: BeautifulSoup, target_language: str) -> Dict[str, Any]:

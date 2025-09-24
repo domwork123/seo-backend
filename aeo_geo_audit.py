@@ -286,8 +286,11 @@ class AEOGeoAuditor:
         errors = []
         
         print(f"DEBUG: Starting crawl for {root_url}, max_pages: {max_pages}")
+        print(f"DEBUG: Initial to_crawl: {to_crawl}")
+        print(f"DEBUG: Initial crawled_pages: {len(crawled_pages)}")
         
         while to_crawl and len(crawled_pages) < max_pages:
+            print(f"DEBUG: Entering while loop - to_crawl: {len(to_crawl)}, crawled_pages: {len(crawled_pages)}, max_pages: {max_pages}")
             current_url = to_crawl.pop(0)
             
             if current_url in self.visited_urls:

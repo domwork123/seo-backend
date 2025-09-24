@@ -3,12 +3,176 @@ import asyncio
 import httpx
 import re
 import json
+import requests
 from typing import Dict, Any, List, Tuple, Optional
 from urllib.parse import urljoin, urlparse, parse_qs
 from bs4 import BeautifulSoup
 import tldextract
 from collections import Counter
 import time
+from playwright.async_api import async_playwright
+
+def is_blocked_html(html: str) -> bool:
+    """
+    Check if HTML content indicates the page is blocked by protection services.
+    
+    Args:
+        html: The HTML content to check
+        
+    Returns:
+        bool: True if the page appears to be blocked
+    """
+    if not html or len(html) < 200:
+        return True
+    
+    html_lower = html.lower()
+    
+    # Check for common blocking indicators
+    blocking_indicators = [
+        'attention required | cloudflare',
+        'checking your browser before accessing',
+        'please wait while we check your browser',
+        'cloudflare',
+        'captcha',
+        'security check',
+        'access denied',
+        'blocked',
+        'rate limited',
+        'too many requests',
+        'please enable javascript',
+        'javascript is disabled'
+    ]
+    
+    for indicator in blocking_indicators:
+        if indicator in html_lower:
+            return True
+    
+    return False
+
+async def fetch_with_fallback(url: str) -> Dict[str, Any]:
+    """
+    Fetch URL content with fallback from requests to Playwright for protected sites.
+    
+    Args:
+        url: The URL to fetch
+        
+    Returns:
+        Dict containing 'html', 'status', 'method', and 'error' if applicable
+    """
+    result = {
+        'html': '',
+        'status': 'success',
+        'method': 'requests',
+        'error': None
+    }
+    
+    # Step 1: Try normal requests.get() with realistic browser headers
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+        
+        if response.status_code == 200:
+            html = response.text
+            
+            # Check if content is blocked
+            if is_blocked_html(html):
+                print(f"DEBUG: Content blocked, trying Playwright fallback for {url}")
+                # Step 2: Try Playwright fallback
+                return await _fetch_with_playwright(url)
+            else:
+                result['html'] = html
+                result['status'] = 'success'
+                result['method'] = 'requests'
+                return result
+        else:
+            print(f"DEBUG: HTTP {response.status_code} for {url}, trying Playwright fallback")
+            # Step 2: Try Playwright fallback
+            return await _fetch_with_playwright(url)
+            
+    except Exception as e:
+        print(f"DEBUG: Requests failed for {url}: {e}, trying Playwright fallback")
+        # Step 2: Try Playwright fallback
+        return await _fetch_with_playwright(url)
+
+async def _fetch_with_playwright(url: str) -> Dict[str, Any]:
+    """
+    Fetch URL content using Playwright as fallback for protected sites.
+    
+    Args:
+        url: The URL to fetch
+        
+    Returns:
+        Dict containing 'html', 'status', 'method', and 'error' if applicable
+    """
+    result = {
+        'html': '',
+        'status': 'success',
+        'method': 'playwright',
+        'error': None
+    }
+    
+    try:
+        async with async_playwright() as p:
+            # Launch Chromium browser
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu'
+                ]
+            )
+            
+            # Create new page with realistic settings
+            context = await browser.new_context(
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1280, 'height': 800},
+                locale='en-US',
+                timezone_id='America/New_York'
+            )
+            
+            page = await context.new_page()
+            
+            # Navigate to URL and wait for network to be idle
+            await page.goto(url, wait_until='networkidle', timeout=30000)
+            
+            # Get page content
+            html = await page.content()
+            
+            # Check if content is still blocked
+            if is_blocked_html(html):
+                result['status'] = 'blocked_by_protection'
+                result['html'] = html
+                result['error'] = 'Content blocked by protection service'
+            else:
+                result['html'] = html
+                result['status'] = 'success'
+            
+            await browser.close()
+            return result
+            
+    except Exception as e:
+        print(f"DEBUG: Playwright failed for {url}: {e}")
+        result['status'] = 'blocked_by_protection'
+        result['error'] = f'Playwright failed: {str(e)}'
+        return result
 
 class AEOGeoAuditor:
     def __init__(self):
@@ -80,6 +244,16 @@ class AEOGeoAuditor:
             # 5. Generate recommendations
             recommendations = self._generate_recommendations(analyzed_pages, scores)
             
+            # Calculate fetch method statistics
+            fetch_methods = {}
+            blocked_pages = 0
+            for page in analyzed_pages:
+                method = page.get('fetch_method', 'unknown')
+                status = page.get('fetch_status', 'unknown')
+                fetch_methods[method] = fetch_methods.get(method, 0) + 1
+                if status == 'blocked_by_protection':
+                    blocked_pages += 1
+            
             return {
                 "domain": urlparse(root_url).netloc,
                 "platform": platform,
@@ -89,7 +263,10 @@ class AEOGeoAuditor:
                 "scores": scores,
                 "pages": analyzed_pages,
                 "recommendations": recommendations,
-                "audit_type": "AEO + GEO Focused"
+                "audit_type": "AEO + GEO Focused",
+                "fetch_methods": fetch_methods,
+                "blocked_pages": blocked_pages,
+                "protection_status": "blocked" if blocked_pages > 0 else "accessible"
             }
             
         except Exception as e:
@@ -122,38 +299,11 @@ class AEOGeoAuditor:
                 await asyncio.sleep(0.5)
             
             try:
-                # Retry logic for protected websites
-                response = None
-                for attempt in range(3):
-                    try:
-                        response = await self.session.get(current_url)
-                        print(f"DEBUG: Response status: {response.status_code} for {current_url} (attempt {attempt + 1})")
-                        
-                        if response.status_code == 200:
-                            break
-                        elif response.status_code in [429, 503, 502, 504]:
-                            # Rate limited or server error, wait and retry
-                            await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                            continue
-                        else:
-                            break
-                    except Exception as retry_error:
-                        if attempt < 2:
-                            print(f"DEBUG: Retry {attempt + 1} for {current_url}: {retry_error}")
-                            await asyncio.sleep(1)
-                            continue
-                        else:
-                            raise retry_error
+                # Use the new fallback system
+                fetch_result = await fetch_with_fallback(current_url)
                 
-                if response and response.status_code == 200:
-                    html = response.text
-                    
-                    # Check for Cloudflare protection
-                    if 'cloudflare' in html.lower() or 'checking your browser' in html.lower():
-                        print(f"DEBUG: Cloudflare protection detected for {current_url}")
-                        errors.append(f"Cloudflare protection detected for {current_url}")
-                        continue
-                    
+                if fetch_result['status'] == 'success':
+                    html = fetch_result['html']
                     soup = BeautifulSoup(html, 'html.parser')
                     
                     # Extract page data
@@ -164,11 +314,12 @@ class AEOGeoAuditor:
                         "title": soup.find('title').get_text().strip() if soup.find('title') else "",
                         "meta_description": self._extract_meta_description(soup),
                         "lang": soup.find('html', {}).get('lang', ''),
-                        "status_code": response.status_code
+                        "fetch_method": fetch_result['method'],
+                        "fetch_status": fetch_result['status']
                     }
                     
                     crawled_pages.append(page_data)
-                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url}")
+                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url} (method: {fetch_result['method']})")
                     
                     # Find internal links
                     internal_links = self._extract_internal_links(soup, current_url, domain)
@@ -176,9 +327,17 @@ class AEOGeoAuditor:
                     for link in internal_links:
                         if link not in self.visited_urls and link not in to_crawl:
                             to_crawl.append(link)
+                            
+                elif fetch_result['status'] == 'blocked_by_protection':
+                    error_msg = f"Blocked by protection service: {fetch_result.get('error', 'Unknown protection')}"
+                    print(f"DEBUG: {error_msg} for {current_url}")
+                    errors.append(error_msg)
+                    continue
                 else:
-                    status_code = response.status_code if response else "No response"
-                    errors.append(f"HTTP {status_code} for {current_url}")
+                    error_msg = f"Fetch failed: {fetch_result.get('error', 'Unknown error')}"
+                    print(f"DEBUG: {error_msg} for {current_url}")
+                    errors.append(error_msg)
+                    continue
                             
             except Exception as e:
                 error_msg = f"Error crawling {current_url}: {e}"

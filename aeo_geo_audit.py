@@ -306,14 +306,43 @@ class AEOGeoAuditor:
                 await asyncio.sleep(0.5)
             
             try:
-                # Direct fetch with proper error handling
+                # Simple, direct fetch approach
                 print(f"DEBUG: Attempting to fetch {current_url}")
-                fetch_result = await fetch_with_fallback(current_url)
-                print(f"DEBUG: Fetch result for {current_url}: {fetch_result['status']}")
                 
-                if fetch_result['status'] == 'success':
-                    html = fetch_result['html']
+                # Try direct requests first
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
+                
+                response = requests.get(current_url, headers=headers, timeout=30, allow_redirects=True)
+                print(f"DEBUG: Response status: {response.status_code}, URL: {response.url}")
+                
+                if response.status_code == 200:
+                    html = response.text
                     print(f"DEBUG: HTML length: {len(html)}")
+                    
+                    # Check if content is blocked
+                    if is_blocked_html(html):
+                        print(f"DEBUG: Content blocked, trying Playwright fallback for {current_url}")
+                        # Try Playwright fallback
+                        playwright_result = await _fetch_with_playwright(current_url)
+                        if playwright_result['status'] == 'success':
+                            html = playwright_result['html']
+                            fetch_method = 'playwright'
+                        else:
+                            error_msg = f"Both requests and Playwright failed for {current_url}"
+                            print(f"DEBUG: {error_msg}")
+                            errors.append(error_msg)
+                            continue
+                    else:
+                        fetch_method = 'requests'
+                    
                     soup = BeautifulSoup(html, 'html.parser')
                     
                     # Extract page data
@@ -324,12 +353,12 @@ class AEOGeoAuditor:
                         "title": soup.find('title').get_text().strip() if soup.find('title') else "",
                         "meta_description": self._extract_meta_description(soup),
                         "lang": soup.find('html', {}).get('lang', ''),
-                        "fetch_method": fetch_result['method'],
-                        "fetch_status": fetch_result['status']
+                        "fetch_method": fetch_method,
+                        "fetch_status": 'success'
                     }
                     
                     crawled_pages.append(page_data)
-                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url}")
+                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url} (method: {fetch_method})")
                     
                     # Find internal links
                     internal_links = self._extract_internal_links(soup, current_url, domain)
@@ -337,15 +366,9 @@ class AEOGeoAuditor:
                     for link in internal_links:
                         if link not in self.visited_urls and link not in to_crawl:
                             to_crawl.append(link)
-                            
-                elif fetch_result['status'] == 'blocked_by_protection':
-                    error_msg = f"Blocked by protection service: {fetch_result.get('error', 'Unknown protection')}"
-                    print(f"DEBUG: {error_msg} for {current_url}")
-                    errors.append(error_msg)
-                    continue
                 else:
-                    error_msg = f"Fetch failed: {fetch_result.get('error', 'Unknown error')}"
-                    print(f"DEBUG: {error_msg} for {current_url}")
+                    error_msg = f"HTTP {response.status_code} for {current_url}"
+                    print(f"DEBUG: {error_msg}")
                     errors.append(error_msg)
                     continue
                             

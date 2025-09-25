@@ -750,3 +750,43 @@ async def audit_single_page(req: AuditRequest = Body(...)):
             "url": req.url
         }
 
+@app.post("/audit-full-website")
+async def audit_full_website(req: AuditRequest = Body(...)):
+    """
+    Full website AEO + GEO audit endpoint using ScrapingBee.
+    Crawls entire website and analyzes all pages.
+    """
+    try:
+        url = req.url
+        if not url:
+            return {"error": "Missing 'url'."}
+
+        print(f"DEBUG: Starting full website AEO + GEO audit for {url}")
+        
+        # Get target language and max pages from request
+        target_language = getattr(req, 'language', 'en')
+        max_pages = getattr(req, 'max_pages', 10)
+        
+        print(f"DEBUG: Parameters - language: {target_language}, max_pages: {max_pages}")
+        
+        # Run full website AEO + GEO audit using ScrapingBee
+        audit_result = await audit_site_aeo_geo(url, target_language, max_pages)
+        
+        print(f"DEBUG: Full website audit completed for {url}")
+        
+        return {
+            "url": url,
+            "audit": audit_result,
+            "audit_type": "AEO + GEO Full Website",
+            "target_language": target_language,
+            "max_pages": max_pages
+        }
+        
+    except Exception as e:
+        print(f"DEBUG: Full website audit failed for {req.url}: {e}")
+        return {
+            "error": "Full website audit failed", 
+            "details": str(e),
+            "url": req.url
+        }
+

@@ -472,87 +472,76 @@ class AEOGeoAuditor:
         return recommendations
 
     async def _crawl_website(self, root_url: str, max_pages: int) -> Dict[str, Any]:
-        """Crawl website using ScrapingBee exclusively"""
+        """Crawl entire website using ScrapingBee exclusively"""
         domain = urlparse(root_url).netloc
         to_crawl = [root_url]
         crawled_pages = []
         errors = []
+        self.visited_urls = set()
         
-        print(f"DEBUG: Starting ScrapingBee crawl for {root_url}, max_pages: {max_pages}")
+        print(f"DEBUG: Starting full website crawl with ScrapingBee for {root_url}, max_pages: {max_pages}")
         
-        # Use ScrapingBee for all page fetching
-        try:
-            print(f"DEBUG: Fetching {root_url} with ScrapingBee")
-            scrapingbee_result = await fetch_with_scrapingbee(root_url)
+        # Crawl all pages using ScrapingBee
+        while to_crawl and len(crawled_pages) < max_pages:
+            current_url = to_crawl.pop(0)
             
-            if scrapingbee_result['status'] == 'success':
-                html = scrapingbee_result['html']
-                print(f"DEBUG: ScrapingBee HTML length: {len(html)}")
+            if current_url in self.visited_urls:
+                continue
                 
-                soup = BeautifulSoup(html, 'html.parser')
+            self.visited_urls.add(current_url)
+            print(f"DEBUG: Crawling {current_url} with ScrapingBee")
+            
+            try:
+                # Use ScrapingBee for every page
+                scrapingbee_result = await fetch_with_scrapingbee(current_url)
                 
-                # Extract page data
-                page_data = {
-                    "url": root_url,
-                    "html": html,
-                    "soup": soup,
-                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
-                    "meta_description": self._extract_meta_description(soup),
-                    "lang": soup.find('html', {}).get('lang', ''),
-                    "fetch_method": 'scrapingbee',
-                    "fetch_status": 'success'
-                }
-                
-                crawled_pages.append(page_data)
-                print(f"DEBUG: Successfully crawled page: {root_url}")
-                
-                # Find internal links for additional pages
-                internal_links = self._extract_internal_links(soup, root_url, domain)
-                print(f"DEBUG: Found {len(internal_links)} internal links")
-                
-                # Try to crawl additional pages with ScrapingBee
-                for link in internal_links[:max_pages-1]:
-                    if link not in self.visited_urls:
-                        try:
-                            print(f"DEBUG: Fetching additional page with ScrapingBee: {link}")
-                            additional_result = await fetch_with_scrapingbee(link)
-                            
-                            if additional_result['status'] == 'success':
-                                html = additional_result['html']
-                                soup = BeautifulSoup(html, 'html.parser')
-                                
-                                page_data = {
-                                    "url": link,
-                                    "html": html,
-                                    "soup": soup,
-                                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
-                                    "meta_description": self._extract_meta_description(soup),
-                                    "lang": soup.find('html', {}).get('lang', ''),
-                                    "fetch_method": 'scrapingbee',
-                                    "fetch_status": 'success'
-                                }
-                                
-                                crawled_pages.append(page_data)
-                                print(f"DEBUG: Successfully crawled additional page: {link}")
-                                
-                                if len(crawled_pages) >= max_pages:
-                                    break
-                            else:
-                                print(f"DEBUG: ScrapingBee failed for {link}: {additional_result.get('error', 'Unknown error')}")
-                                errors.append(f"ScrapingBee failed for {link}")
-                        except Exception as e:
-                            print(f"DEBUG: Error fetching {link}: {e}")
-                            errors.append(f"Error fetching {link}: {e}")
-                            continue
-            else:
-                print(f"DEBUG: ScrapingBee failed for {root_url}: {scrapingbee_result.get('error', 'Unknown error')}")
-                errors.append(f"ScrapingBee failed for {root_url}")
-                
-        except Exception as e:
-            print(f"DEBUG: Error crawling {root_url}: {e}")
-            errors.append(f"Error crawling {root_url}: {e}")
+                if scrapingbee_result['status'] == 'success':
+                    html = scrapingbee_result['html']
+                    print(f"DEBUG: ScrapingBee success for {current_url}, HTML length: {len(html)}")
+                    
+                    soup = BeautifulSoup(html, 'html.parser')
+                    
+                    # Extract page data
+                    page_data = {
+                        "url": current_url,
+                        "html": html,
+                        "soup": soup,
+                        "title": soup.find('title').get_text().strip() if soup.find('title') else "",
+                        "meta_description": self._extract_meta_description(soup),
+                        "lang": soup.find('html', {}).get('lang', ''),
+                        "fetch_method": 'scrapingbee',
+                        "fetch_status": 'success'
+                    }
+                    
+                    crawled_pages.append(page_data)
+                    print(f"DEBUG: Successfully crawled page {len(crawled_pages)}: {current_url}")
+                    
+                    # Find internal links for additional pages
+                    internal_links = self._extract_internal_links(soup, current_url, domain)
+                    print(f"DEBUG: Found {len(internal_links)} internal links on {current_url}")
+                    
+                    # Add new links to crawl queue
+                    for link in internal_links:
+                        if link not in self.visited_urls and link not in to_crawl:
+                            to_crawl.append(link)
+                    
+                    # Add delay between requests to be respectful
+                    if len(crawled_pages) > 0:
+                        await asyncio.sleep(1)  # 1 second delay between ScrapingBee requests
+                        
+                else:
+                    error_msg = f"ScrapingBee failed for {current_url}: {scrapingbee_result.get('error', 'Unknown error')}"
+                    print(f"DEBUG: {error_msg}")
+                    errors.append(error_msg)
+                    continue
+                    
+            except Exception as e:
+                error_msg = f"Error crawling {current_url}: {e}"
+                print(f"DEBUG: {error_msg}")
+                errors.append(error_msg)
+                continue
         
-        print(f"DEBUG: ScrapingBee crawl completed. Pages: {len(crawled_pages)}, Errors: {len(errors)}")
+        print(f"DEBUG: Full website crawl completed. Pages: {len(crawled_pages)}, Errors: {len(errors)}")
         return {"pages": crawled_pages, "errors": errors}
 
     def _extract_internal_links(self, soup: BeautifulSoup, current_url: str, domain: str) -> List[str]:

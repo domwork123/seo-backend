@@ -492,8 +492,8 @@ class AEOGeoAuditor:
             print(f"DEBUG: Crawling {current_url} with ScrapingBee")
             
             try:
-            # Use ScrapingBee for every page
-            scrapingbee_result = fetch_with_scrapingbee(current_url)
+                # Use ScrapingBee for every page
+                scrapingbee_result = fetch_with_scrapingbee(current_url)
                 
                 if scrapingbee_result['status'] == 'success':
                     html = scrapingbee_result['html']

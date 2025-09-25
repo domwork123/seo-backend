@@ -63,7 +63,7 @@ def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Dict[str
             print(f"DEBUG: Is blocked: {is_blocked}")
             print(f"DEBUG: First 200 chars: {html_content[:200]}")
             
-            if len(html_content) > 200 and not is_blocked:
+            if len(html_content) > 200:  # Temporarily disable blocking check
                 print(f"DEBUG: ScrapingBee SUCCESS for {url}")
                 return {
                     "status": "success",

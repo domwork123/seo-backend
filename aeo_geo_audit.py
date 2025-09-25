@@ -11,6 +11,7 @@ import tldextract
 from collections import Counter
 import time
 from playwright.async_api import async_playwright
+from scrapingbee_integration import fetch_with_scrapingbee
 
 def is_blocked_html(html: str) -> bool:
     """
@@ -392,60 +393,73 @@ class AEOGeoAuditor:
             }
 
     async def _fetch_single_page(self, url: str) -> Optional[Dict[str, Any]]:
-        """Fetch a single page with fallback to Playwright if needed"""
+        """Fetch a single page using ScrapingBee as primary method"""
         try:
-            print(f"DEBUG: Fetching single page: {url}")
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
-            }
+            print(f"DEBUG: Fetching single page with ScrapingBee: {url}")
             
-            response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
-            print(f"DEBUG: Response status: {response.status_code}")
+            # Try ScrapingBee first (most reliable for protected sites)
+            scrapingbee_result = await fetch_with_scrapingbee(url)
             
-            if response.status_code == 200:
-                html = response.text
-                print(f"DEBUG: HTML length: {len(html)}")
-                
-                # Check if content is blocked
-                if is_blocked_html(html):
-                    print(f"DEBUG: Content blocked, trying Browserless fallback for {url}")
-                    browserless_result = await _fetch_with_browserless(url)
-                    if browserless_result['status'] == 'success':
-                        html = browserless_result['html']
-                        fetch_method = 'browserless'
-                    else:
-                        print(f"DEBUG: Browserless failed, trying Playwright fallback for {url}")
-                        playwright_result = await _fetch_with_playwright(url)
-                        if playwright_result['status'] == 'success':
-                            html = playwright_result['html']
-                            fetch_method = 'playwright'
-                        else:
-                            print(f"DEBUG: Both Browserless and Playwright failed for {url}")
-                            return None
-                else:
-                    fetch_method = 'requests'
-                
-                soup = BeautifulSoup(html, 'html.parser')
-                
-                return {
-                    "url": url,
-                    "html": html,
-                    "soup": soup,
-                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
-                    "meta_description": self._extract_meta_description(soup),
-                    "lang": soup.find('html', {}).get('lang', ''),
-                    "fetch_method": fetch_method,
-                    "fetch_status": 'success'
-                }
+            if scrapingbee_result['status'] == 'success':
+                html = scrapingbee_result['html']
+                fetch_method = 'scrapingbee'
+                print(f"DEBUG: ScrapingBee success, HTML length: {len(html)}")
             else:
-                print(f"DEBUG: HTTP {response.status_code} for {url}")
-                return None
+                print(f"DEBUG: ScrapingBee failed: {scrapingbee_result.get('error', 'Unknown error')}")
+                
+                # Fallback to regular requests
+                print(f"DEBUG: Trying regular requests fallback for {url}")
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
+                
+                response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
+                print(f"DEBUG: Regular requests status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    html = response.text
+                    print(f"DEBUG: Regular requests HTML length: {len(html)}")
+                    
+                    # Check if content is blocked
+                    if is_blocked_html(html):
+                        print(f"DEBUG: Content blocked, trying Browserless fallback for {url}")
+                        browserless_result = await _fetch_with_browserless(url)
+                        if browserless_result['status'] == 'success':
+                            html = browserless_result['html']
+                            fetch_method = 'browserless'
+                        else:
+                            print(f"DEBUG: Browserless failed, trying Playwright fallback for {url}")
+                            playwright_result = await _fetch_with_playwright(url)
+                            if playwright_result['status'] == 'success':
+                                html = playwright_result['html']
+                                fetch_method = 'playwright'
+                            else:
+                                print(f"DEBUG: All methods failed for {url}")
+                                return None
+                    else:
+                        fetch_method = 'requests'
+                else:
+                    print(f"DEBUG: Regular requests failed with HTTP {response.status_code}")
+                    return None
+            
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            return {
+                "url": url,
+                "html": html,
+                "soup": soup,
+                "title": soup.find('title').get_text().strip() if soup.find('title') else "",
+                "meta_description": self._extract_meta_description(soup),
+                "lang": soup.find('html', {}).get('lang', ''),
+                "fetch_method": fetch_method,
+                "fetch_status": 'success'
+            }
                 
         except Exception as e:
             print(f"DEBUG: Error fetching {url}: {e}")

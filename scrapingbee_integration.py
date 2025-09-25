@@ -58,7 +58,13 @@ def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Dict[str
             print(f"DEBUG: ScrapingBee HTML length: {len(html_content)}")
             
             # Check if content is valid
-            if len(html_content) > 200 and not _is_blocked_content(html_content):
+            is_blocked = _is_blocked_content(html_content)
+            print(f"DEBUG: Content length: {len(html_content)}")
+            print(f"DEBUG: Is blocked: {is_blocked}")
+            print(f"DEBUG: First 200 chars: {html_content[:200]}")
+            
+            if len(html_content) > 200 and not is_blocked:
+                print(f"DEBUG: ScrapingBee SUCCESS for {url}")
                 return {
                     "status": "success",
                     "html": html_content,
@@ -69,11 +75,12 @@ def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Dict[str
                     }
                 }
             else:
+                print(f"DEBUG: ScrapingBee BLOCKED for {url} - length: {len(html_content)}, blocked: {is_blocked}")
                 return {
                     "status": "blocked",
                     "html": html_content,
                     "method": "scrapingbee",
-                    "error": "Content appears to be blocked or invalid"
+                    "error": f"Content appears to be blocked or invalid - length: {len(html_content)}, blocked: {is_blocked}"
                 }
         else:
             return {

@@ -4,7 +4,7 @@ import json
 from typing import Dict, Any, Optional
 from scrapingbee_config import get_scrapingbee_config
 
-async def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
+def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Fetch website content using ScrapingBee API
     
@@ -20,12 +20,12 @@ async def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Di
         
         # Default options for ScrapingBee (matching your successful test)
         default_options = {
-            "render_js": True,  # Execute JavaScript
-            "premium_proxy": False,  # Use classic proxy (like your successful test)
+            "render_js": True,  # Execute JavaScript (boolean)
+            "premium_proxy": False,  # Use classic proxy (boolean)
             "country_code": "US",  # Target country
             "wait": 0,  # No wait (like your successful test)
-            "wait_for": "domcontentloaded",  # Wait for DOM content loaded
-            "block_resources": True,  # Block resources (like your successful test)
+            "wait_browser": "domcontentloaded",  # Wait for DOM content loaded (correct parameter name)
+            "block_resources": True,  # Block resources (boolean)
         }
         
         # Merge with provided options
@@ -114,10 +114,10 @@ def _is_blocked_content(html: str) -> bool:
     
     return False
 
-async def test_scrapingbee():
+def test_scrapingbee():
     """Test ScrapingBee with a simple website"""
     test_url = "https://example.com"
-    result = await fetch_with_scrapingbee(test_url)
+    result = fetch_with_scrapingbee(test_url)
     
     print(f"ScrapingBee test result: {result['status']}")
     if result['status'] == 'success':

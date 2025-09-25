@@ -398,7 +398,7 @@ class AEOGeoAuditor:
             print(f"DEBUG: Fetching single page with ScrapingBee: {url}")
             
             # Use ScrapingBee exclusively - no fallbacks needed
-            scrapingbee_result = await fetch_with_scrapingbee(url)
+            scrapingbee_result = fetch_with_scrapingbee(url)
             
             if scrapingbee_result['status'] == 'success':
                 html = scrapingbee_result['html']
@@ -492,8 +492,8 @@ class AEOGeoAuditor:
             print(f"DEBUG: Crawling {current_url} with ScrapingBee")
             
             try:
-                # Use ScrapingBee for every page
-                scrapingbee_result = await fetch_with_scrapingbee(current_url)
+            # Use ScrapingBee for every page
+            scrapingbee_result = fetch_with_scrapingbee(current_url)
                 
                 if scrapingbee_result['status'] == 'success':
                     html = scrapingbee_result['html']

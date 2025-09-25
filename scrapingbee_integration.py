@@ -18,13 +18,14 @@ async def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Di
     try:
         config = get_scrapingbee_config()
         
-        # Default options for ScrapingBee
+        # Default options for ScrapingBee (matching your successful test)
         default_options = {
             "render_js": True,  # Execute JavaScript
-            "premium_proxy": True,  # Use premium proxies
+            "premium_proxy": False,  # Use classic proxy (like your successful test)
             "country_code": "US",  # Target country
-            "wait": 3000,  # Wait 3 seconds for page load
-            "wait_for": "networkidle",  # Wait for network to be idle
+            "wait": 0,  # No wait (like your successful test)
+            "wait_for": "domcontentloaded",  # Wait for DOM content loaded
+            "block_resources": True,  # Block resources (like your successful test)
         }
         
         # Merge with provided options

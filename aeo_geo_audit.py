@@ -393,73 +393,33 @@ class AEOGeoAuditor:
             }
 
     async def _fetch_single_page(self, url: str) -> Optional[Dict[str, Any]]:
-        """Fetch a single page using ScrapingBee as primary method"""
+        """Fetch a single page using ScrapingBee exclusively"""
         try:
             print(f"DEBUG: Fetching single page with ScrapingBee: {url}")
             
-            # Try ScrapingBee first (most reliable for protected sites)
+            # Use ScrapingBee exclusively - no fallbacks needed
             scrapingbee_result = await fetch_with_scrapingbee(url)
             
             if scrapingbee_result['status'] == 'success':
                 html = scrapingbee_result['html']
                 fetch_method = 'scrapingbee'
                 print(f"DEBUG: ScrapingBee success, HTML length: {len(html)}")
+                
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                return {
+                    "url": url,
+                    "html": html,
+                    "soup": soup,
+                    "title": soup.find('title').get_text().strip() if soup.find('title') else "",
+                    "meta_description": self._extract_meta_description(soup),
+                    "lang": soup.find('html', {}).get('lang', ''),
+                    "fetch_method": fetch_method,
+                    "fetch_status": 'success'
+                }
             else:
                 print(f"DEBUG: ScrapingBee failed: {scrapingbee_result.get('error', 'Unknown error')}")
-                
-                # Fallback to regular requests
-                print(f"DEBUG: Trying regular requests fallback for {url}")
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1'
-                }
-                
-                response = requests.get(url, headers=headers, timeout=30, allow_redirects=True)
-                print(f"DEBUG: Regular requests status: {response.status_code}")
-                
-                if response.status_code == 200:
-                    html = response.text
-                    print(f"DEBUG: Regular requests HTML length: {len(html)}")
-                    
-                    # Check if content is blocked
-                    if is_blocked_html(html):
-                        print(f"DEBUG: Content blocked, trying Browserless fallback for {url}")
-                        browserless_result = await _fetch_with_browserless(url)
-                        if browserless_result['status'] == 'success':
-                            html = browserless_result['html']
-                            fetch_method = 'browserless'
-                        else:
-                            print(f"DEBUG: Browserless failed, trying Playwright fallback for {url}")
-                            playwright_result = await _fetch_with_playwright(url)
-                            if playwright_result['status'] == 'success':
-                                html = playwright_result['html']
-                                fetch_method = 'playwright'
-                            else:
-                                print(f"DEBUG: All methods failed for {url}")
-                                return None
-                    else:
-                        fetch_method = 'requests'
-                else:
-                    print(f"DEBUG: Regular requests failed with HTTP {response.status_code}")
-                    return None
-            
-            soup = BeautifulSoup(html, 'html.parser')
-            
-            return {
-                "url": url,
-                "html": html,
-                "soup": soup,
-                "title": soup.find('title').get_text().strip() if soup.find('title') else "",
-                "meta_description": self._extract_meta_description(soup),
-                "lang": soup.find('html', {}).get('lang', ''),
-                "fetch_method": fetch_method,
-                "fetch_status": 'success'
-            }
+                return None
                 
         except Exception as e:
             print(f"DEBUG: Error fetching {url}: {e}")
@@ -512,27 +472,22 @@ class AEOGeoAuditor:
         return recommendations
 
     async def _crawl_website(self, root_url: str, max_pages: int) -> Dict[str, Any]:
-        """Crawl website and collect all internal pages - SIMPLE WORKING VERSION"""
+        """Crawl website using ScrapingBee exclusively"""
         domain = urlparse(root_url).netloc
         to_crawl = [root_url]
         crawled_pages = []
         errors = []
         
-        print(f"DEBUG: Starting crawl for {root_url}, max_pages: {max_pages}")
+        print(f"DEBUG: Starting ScrapingBee crawl for {root_url}, max_pages: {max_pages}")
         
-        # Simple approach - just try to fetch the main page
+        # Use ScrapingBee for all page fetching
         try:
-            print(f"DEBUG: Fetching {root_url}")
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            print(f"DEBUG: Fetching {root_url} with ScrapingBee")
+            scrapingbee_result = await fetch_with_scrapingbee(root_url)
             
-            response = requests.get(root_url, headers=headers, timeout=30, allow_redirects=True)
-            print(f"DEBUG: Response status: {response.status_code}")
-            
-            if response.status_code == 200:
-                html = response.text
-                print(f"DEBUG: HTML length: {len(html)}")
+            if scrapingbee_result['status'] == 'success':
+                html = scrapingbee_result['html']
+                print(f"DEBUG: ScrapingBee HTML length: {len(html)}")
                 
                 soup = BeautifulSoup(html, 'html.parser')
                 
@@ -544,7 +499,7 @@ class AEOGeoAuditor:
                     "title": soup.find('title').get_text().strip() if soup.find('title') else "",
                     "meta_description": self._extract_meta_description(soup),
                     "lang": soup.find('html', {}).get('lang', ''),
-                    "fetch_method": 'requests',
+                    "fetch_method": 'scrapingbee',
                     "fetch_status": 'success'
                 }
                 
@@ -555,14 +510,15 @@ class AEOGeoAuditor:
                 internal_links = self._extract_internal_links(soup, root_url, domain)
                 print(f"DEBUG: Found {len(internal_links)} internal links")
                 
-                # Try to crawl a few more pages
+                # Try to crawl additional pages with ScrapingBee
                 for link in internal_links[:max_pages-1]:
                     if link not in self.visited_urls:
                         try:
-                            print(f"DEBUG: Fetching additional page: {link}")
-                            response = requests.get(link, headers=headers, timeout=30, allow_redirects=True)
-                            if response.status_code == 200:
-                                html = response.text
+                            print(f"DEBUG: Fetching additional page with ScrapingBee: {link}")
+                            additional_result = await fetch_with_scrapingbee(link)
+                            
+                            if additional_result['status'] == 'success':
+                                html = additional_result['html']
                                 soup = BeautifulSoup(html, 'html.parser')
                                 
                                 page_data = {
@@ -572,7 +528,7 @@ class AEOGeoAuditor:
                                     "title": soup.find('title').get_text().strip() if soup.find('title') else "",
                                     "meta_description": self._extract_meta_description(soup),
                                     "lang": soup.find('html', {}).get('lang', ''),
-                                    "fetch_method": 'requests',
+                                    "fetch_method": 'scrapingbee',
                                     "fetch_status": 'success'
                                 }
                                 
@@ -581,18 +537,22 @@ class AEOGeoAuditor:
                                 
                                 if len(crawled_pages) >= max_pages:
                                     break
+                            else:
+                                print(f"DEBUG: ScrapingBee failed for {link}: {additional_result.get('error', 'Unknown error')}")
+                                errors.append(f"ScrapingBee failed for {link}")
                         except Exception as e:
                             print(f"DEBUG: Error fetching {link}: {e}")
+                            errors.append(f"Error fetching {link}: {e}")
                             continue
             else:
-                print(f"DEBUG: HTTP {response.status_code} for {root_url}")
-                errors.append(f"HTTP {response.status_code} for {root_url}")
+                print(f"DEBUG: ScrapingBee failed for {root_url}: {scrapingbee_result.get('error', 'Unknown error')}")
+                errors.append(f"ScrapingBee failed for {root_url}")
                 
         except Exception as e:
             print(f"DEBUG: Error crawling {root_url}: {e}")
             errors.append(f"Error crawling {root_url}: {e}")
         
-        print(f"DEBUG: Crawl completed. Pages: {len(crawled_pages)}, Errors: {len(errors)}")
+        print(f"DEBUG: ScrapingBee crawl completed. Pages: {len(crawled_pages)}, Errors: {len(errors)}")
         return {"pages": crawled_pages, "errors": errors}
 
     def _extract_internal_links(self, soup: BeautifulSoup, current_url: str, domain: str) -> List[str]:

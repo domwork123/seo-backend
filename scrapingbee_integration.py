@@ -32,7 +32,7 @@ async def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Di
         if options:
             default_options.update(options)
         
-        # Prepare request
+        # Prepare request parameters (GET method with query params)
         params = {
             "api_key": config["api_key"],
             "url": url,
@@ -40,8 +40,9 @@ async def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Di
         }
         
         print(f"DEBUG: Fetching {url} with ScrapingBee")
+        print(f"DEBUG: ScrapingBee params: {params}")
         
-        # Make request to ScrapingBee
+        # Make GET request to ScrapingBee (correct method based on your successful test)
         response = requests.get(
             config["base_url"],
             params=params,
@@ -49,6 +50,7 @@ async def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Di
         )
         
         print(f"DEBUG: ScrapingBee response status: {response.status_code}")
+        print(f"DEBUG: ScrapingBee response text: {response.text[:500]}")
         
         if response.status_code == 200:
             html_content = response.text

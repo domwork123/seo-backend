@@ -63,7 +63,7 @@ def fetch_with_scrapingbee(url: str, options: Dict[str, Any] = None) -> Dict[str
             print(f"DEBUG: Is blocked: {is_blocked}")
             print(f"DEBUG: First 200 chars: {html_content[:200]}")
             
-            if len(html_content) > 200:  # Temporarily disable blocking check
+            if len(html_content) > 200 and not is_blocked:
                 print(f"DEBUG: ScrapingBee SUCCESS for {url}")
                 return {
                     "status": "success",
@@ -106,19 +106,24 @@ def _is_blocked_content(html: str) -> bool:
     
     html_lower = html.lower()
     
-    # Check for blocking indicators
+    # Check for specific blocking indicators (more precise)
     blocking_indicators = [
         "access denied",
-        "blocked",
-        "captcha",
-        "cloudflare",
+        "blocked by",
+        "captcha required",
+        "cloudflare checking your browser",
         "rate limited",
-        "too many requests"
+        "too many requests",
+        "please wait while we check your browser"
     ]
     
     for indicator in blocking_indicators:
         if indicator in html_lower:
             return True
+    
+    # Check for very short content that might be error pages
+    if len(html) < 500:
+        return True
     
     return False
 

@@ -2,6 +2,7 @@
 import openai
 import json
 import re
+import os
 from typing import Dict, List, Any, Optional
 from bs4 import BeautifulSoup
 from scrapingbee_integration import fetch_with_scrapingbee
@@ -11,7 +12,11 @@ class QueryAnalyzer:
     """Analyze how brands appear in AI query responses"""
     
     def __init__(self):
-        self.openai_client = openai.OpenAI(api_key=openai.api_key)
+        # Get OpenAI API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+        self.openai_client = openai.OpenAI(api_key=api_key)
     
     async def analyze_website_queries(self, url: str, queries: List[str] = None) -> Dict[str, Any]:
         """

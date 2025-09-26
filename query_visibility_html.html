@@ -1,0 +1,102 @@
+<!-- Query Visibility Checker HTML Structure -->
+<!-- Add this to your Lovable dashboard Query Visibility Checker section -->
+
+<div class="query-visibility-checker">
+    <!-- Header -->
+    <div class="header">
+        <h1>Query Visibility Checker</h1>
+        <p>Intelligent brand analysis and query optimization platform</p>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="step-indicator">
+        <div class="step-circle active" data-step-indicator="1">
+            <span>1</span>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-circle" data-step-indicator="2">
+            <i class="fas fa-info-circle"></i>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-circle" data-step-indicator="3">
+            <i class="fas fa-check"></i>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-circle" data-step-indicator="4">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+    </div>
+
+    <!-- Step 1: Domain Input -->
+    <div class="content-card" data-step="domain">
+        <h2>Welcome to Query Visibility Checker</h2>
+        <p>Let's create your brand profile starting with your website</p>
+        
+        <div class="input-group">
+            <label for="domain-input">Brand Website Domain</label>
+            <div class="input-wrapper">
+                <input 
+                    type="text" 
+                    id="domain-input" 
+                    data-input="domain"
+                    placeholder="yourbrand.com"
+                    class="domain-input"
+                />
+                <i class="fas fa-globe input-icon"></i>
+            </div>
+            <p class="input-help">
+                Enter your brand's main website domain (e.g., apple.com, nike.com)<br>
+                We'll use AI to research your domain and automatically extract company information for the next step.
+            </p>
+        </div>
+        
+        <button 
+            class="primary-button" 
+            data-action="get-company-info"
+        >
+            Get Company Information
+            <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+
+    <!-- Step 2: Brand Information -->
+    <div class="content-card" data-step="brand" style="display: none;">
+        <h2>Brand Information Extracted</h2>
+        <div class="brand-info">
+            <!-- This will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Step 3: Generated Queries -->
+    <div class="content-card" data-step="queries" style="display: none;">
+        <h2>Generated Queries & AI Responses</h2>
+        <div class="queries-info">
+            <!-- This will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Step 4: Results & Recommendations -->
+    <div class="content-card" data-step="results" style="display: none;">
+        <h2>Analysis Results & Recommendations</h2>
+        <div class="results-info">
+            <!-- This will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-container" data-loading style="display: none;">
+        <!-- This will be populated by JavaScript -->
+    </div>
+
+    <!-- Error State -->
+    <div class="error-container" data-error style="display: none;">
+        <!-- This will be populated by JavaScript -->
+    </div>
+</div>
+
+<!-- Include Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<!-- Include the JavaScript and CSS -->
+<link rel="stylesheet" href="query_visibility_styles.css">
+<script src="frontend_integration.js"></script>

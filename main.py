@@ -17,6 +17,7 @@ from aeo_geo_optimizer import detect_faq, extract_images, optimize_meta_descript
 from aeo_geo_audit import audit_site_aeo_geo, audit_single_page_aeo_geo
 from audit import audit_site
 from enhanced_audit import enhanced_audit_site
+from query_analyzer import analyze_query_visibility
 
 
 app = FastAPI()
@@ -52,6 +53,10 @@ class OptimizeRequest(BaseModel):
     url: Optional[str] = None
     audit: Optional[Dict[str, Any]] = None
     limit: int = 10
+
+class QueryCheckRequest(BaseModel):
+    url: str
+    queries: Optional[List[str]] = None
 
 # ---------- /audit ----------
 @app.post("/audit")
@@ -786,6 +791,47 @@ async def audit_full_website(req: AuditRequest = Body(...)):
         print(f"DEBUG: Full website audit failed for {req.url}: {e}")
         return {
             "error": "Full website audit failed", 
+            "details": str(e),
+            "url": req.url
+        }
+
+# ---------- /query-check ----------
+@app.post("/query-check")
+async def query_check(req: QueryCheckRequest = Body(...)):
+    """
+    Analyze how a brand appears in AI query responses
+    
+    Input:
+    - url: Website URL to analyze
+    - queries: Optional list of custom queries (if empty, auto-generate)
+    
+    Output:
+    - Analysis results with AI responses and recommendations
+    """
+    try:
+        url = req.url
+        queries = req.queries
+        
+        print(f"DEBUG: Starting query check for {url}")
+        print(f"DEBUG: Custom queries provided: {queries is not None and len(queries) > 0}")
+        
+        # Analyze query visibility
+        result = await analyze_query_visibility(url, queries)
+        
+        print(f"DEBUG: Query check completed for {url}")
+        print(f"DEBUG: Success: {result.get('success', False)}")
+        print(f"DEBUG: Queries analyzed: {result.get('queries_analyzed', 0)}")
+        
+        return {
+            "url": url,
+            "query_analysis": result,
+            "analysis_type": "AI Query Visibility"
+        }
+        
+    except Exception as e:
+        print(f"DEBUG: Query check failed for {req.url}: {e}")
+        return {
+            "error": "Query check failed", 
             "details": str(e),
             "url": req.url
         }

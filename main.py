@@ -217,13 +217,13 @@ async def score_bulk(
 
             # Save scores to Supabase ✅
             try:
-            supabase.table("scores").insert({
-                "url": u,
-                "seo_score": scores.get("seo_score"),
-                "ai_score": scores.get("ai_score"),
-                "combined_score": scores.get("combined_score"),
-                "details": scores  # put full JSON into details column
-            }).execute()
+                supabase.table("scores").insert({
+                    "url": u,
+                    "seo_score": scores.get("seo_score"),
+                    "ai_score": scores.get("ai_score"),
+                    "combined_score": scores.get("combined_score"),
+                    "details": scores  # put full JSON into details column
+                }).execute()
             except Exception:
                 pass
 

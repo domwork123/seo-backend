@@ -100,35 +100,25 @@ async def audit(req: AuditRequest = Body(...)):
         # Step 3: Save to Supabase
         print(f"💾 Saving to Supabase...")
         
-        # Save site info
+        # Save site info (using existing schema)
         site_info = {
-            "site_id": site_id,
-            "url": req.url,
-            "brand_name": signals.get("brand_name", "Unknown"),
-            "description": signals.get("description", ""),
-            "location": signals.get("location", ""),
-            "industry": signals.get("industry", "Unknown"),
-            "created_at": datetime.utcnow().isoformat()
+            "url": req.url
         }
         
         try:
             supabase.table("sites").insert(site_info).execute()
-            print(f"💾 Site info saved: {site_info['brand_name']}")
+            print(f"💾 Site info saved: {req.url}")
         except Exception as e:
             print(f"❌ Error saving site info: {e}")
             return {"error": f"Failed to save site info: {str(e)}"}
         
-        # Save pages
+        # Save pages (using existing schema)
         pages_data = []
         for page in pages:
             page_data = {
-                "id": str(uuid.uuid4()),
-                "site_id": site_id,
                 "url": page.get("url", ""),
                 "title": page.get("title", ""),
-                "raw_text": page.get("raw_text", ""),
-                "images": page.get("images", []),
-                "created_at": datetime.utcnow().isoformat()
+                "content": page.get("raw_text", "")  # Using 'content' instead of 'raw_text'
             }
             pages_data.append(page_data)
         
@@ -140,16 +130,21 @@ async def audit(req: AuditRequest = Body(...)):
                 print(f"❌ Error saving pages: {e}")
                 return {"error": f"Failed to save pages: {str(e)}"}
         
-        # Save audit data
+        # Save audit data (using existing schema)
         audit_data = {
-            "id": str(uuid.uuid4()),
-            "site_id": site_id,
-            "faqs": signals.get("faqs", []),
-            "schema": signals.get("schema", []),
-            "alt_text": signals.get("alt_text", []),
-            "geo_signals": signals.get("geo_signals", []),
-            "competitors": signals.get("competitors", []),
-            "created_at": datetime.utcnow().isoformat()
+            "url": req.url,
+            "data": {
+                "faqs": signals.get("faqs", []),
+                "schema": signals.get("schema", []),
+                "alt_text": signals.get("alt_text", []),
+                "geo_signals": signals.get("geo_signals", []),
+                "competitors": signals.get("competitors", []),
+                "brand_name": signals.get("brand_name", "Unknown"),
+                "description": signals.get("description", ""),
+                "location": signals.get("location", ""),
+                "products": signals.get("products", []),
+                "topics": signals.get("topics", [])
+            }
         }
         
         try:

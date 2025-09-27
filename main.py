@@ -260,10 +260,10 @@ async def optimize_post(
 
         # Save optimizations to Supabase ✅
         try:
-        supabase.table("optimizations").insert({
-            "url": url,
-            "results": out
-        }).execute()
+            supabase.table("optimizations").insert({
+                "url": url,
+                "results": out
+            }).execute()
         except Exception:
             pass
 

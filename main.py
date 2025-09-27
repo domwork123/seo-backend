@@ -18,7 +18,9 @@ from aeo_geo_audit import audit_site_aeo_geo, audit_single_page_aeo_geo
 from audit import audit_site
 from enhanced_audit import enhanced_audit_site
 from query_analyzer import analyze_query_visibility
-from audit_functions import crawl_website_with_scrapingbee, extract_signals_from_pages
+from scrapingbee_crawler import crawl_website_with_scrapingbee
+from signal_extractor import extract_signals_from_pages
+from supabase_schema import ensure_schema_exists, save_audit_data
 import uuid
 from datetime import datetime
 
@@ -43,6 +45,9 @@ app.add_middleware(
 
 # ---------- models ----------
 class AuditRequest(BaseModel):
+    url: str
+
+class NewAuditRequest(BaseModel):
     url: str
 
 class ScoreRequest(BaseModel):
@@ -83,12 +88,20 @@ async def audit(req: AuditRequest = Body(...)):
         site_id = str(uuid.uuid4())
         print(f"📋 Generated site_id: {site_id}")
         
+        # Ensure Supabase schema exists
+        print("🔧 Ensuring Supabase schema...")
+        if not ensure_schema_exists():
+            print("⚠️ Schema setup failed, continuing anyway...")
+        
         # Step 1: Crawl website with ScrapingBee (15 pages max)
         print(f"🕷️ Crawling website with ScrapingBee...")
-        crawl_result = await crawl_website_with_scrapingbee(req.url, max_pages=15)
+        crawl_result = crawl_website_with_scrapingbee(req.url, max_pages=15)
         
         if not crawl_result.get("success"):
-            return {"error": f"Crawl failed: {crawl_result.get('error', 'Unknown error')}"}
+            return {
+                "error": f"Crawl failed: {crawl_result.get('error', 'Unknown error')}",
+                "site_id": site_id
+            }
         
         pages = crawl_result.get("pages", [])
         print(f"✅ Crawled {len(pages)} pages successfully")
@@ -99,61 +112,10 @@ async def audit(req: AuditRequest = Body(...)):
         
         # Step 3: Save to Supabase
         print(f"💾 Saving to Supabase...")
+        save_success = save_audit_data(site_id, req.url, pages, signals)
         
-        # Save site info (using existing schema)
-        site_info = {
-            "url": req.url
-        }
-        
-        try:
-            supabase.table("sites").insert(site_info).execute()
-            print(f"💾 Site info saved: {req.url}")
-        except Exception as e:
-            print(f"❌ Error saving site info: {e}")
-            return {"error": f"Failed to save site info: {str(e)}"}
-        
-        # Save pages (using existing schema)
-        pages_data = []
-        for page in pages:
-            page_data = {
-                "url": page.get("url", ""),
-                "title": page.get("title", ""),
-                "content": page.get("raw_text", "")  # Using 'content' instead of 'raw_text'
-            }
-            pages_data.append(page_data)
-        
-        if pages_data:
-            try:
-                supabase.table("pages").insert(pages_data).execute()
-                print(f"💾 Pages saved: {len(pages_data)} pages")
-            except Exception as e:
-                print(f"❌ Error saving pages: {e}")
-                return {"error": f"Failed to save pages: {str(e)}"}
-        
-        # Save audit data (using existing schema)
-        audit_data = {
-            "site_id": site_id,
-            "url": req.url,
-            "results": {
-                "faqs": signals.get("faqs", []),
-                "schema": signals.get("schema", []),
-                "alt_text": signals.get("alt_text", []),
-                "geo_signals": signals.get("geo_signals", []),
-                "competitors": signals.get("competitors", []),
-                "brand_name": signals.get("brand_name", "Unknown"),
-                "description": signals.get("description", ""),
-                "location": signals.get("location", ""),
-                "products": signals.get("products", []),
-                "topics": signals.get("topics", [])
-            }
-        }
-        
-        try:
-            supabase.table("audits").insert(audit_data).execute()
-            print(f"💾 Audit data saved")
-        except Exception as e:
-            print(f"❌ Error saving audit data: {e}")
-            return {"error": f"Failed to save audit data: {str(e)}"}
+        if not save_success:
+            print("⚠️ Failed to save to Supabase, but continuing...")
         
         # Step 4: Return structured JSON
         return {
@@ -163,7 +125,7 @@ async def audit(req: AuditRequest = Body(...)):
             "description": signals.get("description", ""),
             "products": signals.get("products", []),
             "location": signals.get("location", ""),
-            "faqs": signals.get("faqs", []),
+            "faqs": [faq.get("question", "") for faq in signals.get("faqs", [])],
             "topics": signals.get("topics", []),
             "competitors": signals.get("competitors", []),
             "pages_crawled": len(pages),
@@ -172,7 +134,10 @@ async def audit(req: AuditRequest = Body(...)):
         
     except Exception as e:
         print(f"❌ Audit failed: {e}")
-        return {"error": f"Audit failed: {str(e)}"}
+        return {
+            "error": f"Audit failed: {str(e)}",
+            "site_id": site_id if 'site_id' in locals() else None
+        }
 
 # Legacy audit endpoint (keeping for backward compatibility)
 @app.post("/audit-legacy")
@@ -294,7 +259,7 @@ async def process(req: AuditRequest):
             print(f"DEBUG: LLM optimization failed for {req.url}: {llm_error}")
             # Fallback to base optimizations
             try:
-        optimize_results = optimize_site(audit_results, limit=10, detail=True)
+                optimize_results = optimize_site(audit_results, limit=10, detail=True)
                 print(f"DEBUG: Using base optimizations as fallback for {req.url}")
             except Exception as base_error:
                 print(f"DEBUG: Base optimization also failed for {req.url}: {base_error}")
@@ -313,40 +278,40 @@ async def process(req: AuditRequest):
         # 4️⃣ Insert into sites (once)
         site_id = None
         try:
-        site_insert = supabase.table("sites").insert({"url": req.url}).execute()
+            site_insert = supabase.table("sites").insert({"url": req.url}).execute()
             site_id = site_insert.data[0]["id"] if getattr(site_insert, "data", None) else None
         except Exception:
             pass
          
         # 5️⃣ Insert into audits
         try:
-        supabase.table("audits").insert({
-            "site_id": site_id,
-            "url": req.url,
-            "results": audit_results
-        }).execute()
+            supabase.table("audits").insert({
+                "site_id": site_id,
+                "url": req.url,
+                "results": audit_results
+            }).execute()
         except Exception:
             pass
         
         # 6️⃣ Insert into optimizations
         try:
-        supabase.table("optimizations").insert({
-            "site_id": site_id,
-            "url": req.url,
-            "results": optimize_results
-        }).execute()
+            supabase.table("optimizations").insert({
+                "site_id": site_id,
+                "url": req.url,
+                "results": optimize_results
+            }).execute()
         except Exception:
             pass
         
         # 7️⃣ Insert into scores
         try:
-        supabase.table("scores").insert({
-            "site_id": site_id,
-            "seo_score": seo_score,
-            "ai_score": ai_score,
-            "combined_score": combined_score,
-            "results": score_results
-        }).execute()
+            supabase.table("scores").insert({
+                "site_id": site_id,
+                "seo_score": seo_score,
+                "ai_score": ai_score,
+                "combined_score": combined_score,
+                "results": score_results
+            }).execute()
         except Exception:
             pass
         
@@ -981,4 +946,71 @@ async def query_check(req: QueryCheckRequest = Body(...)):
     except Exception as e:
         print(f"❌ Query check failed: {e}")
         return {"error": f"Query check failed: {str(e)}"}
+
+# ---------- /audit-new ----------
+@app.post("/audit-new")
+async def audit_new(req: NewAuditRequest = Body(...)):
+    """
+    NEW EVIKA audit endpoint with ScrapingBee integration:
+    1. Crawls website using ScrapingBee (15 pages max)
+    2. Extracts AEO + GEO signals from all pages  
+    3. Saves everything to Supabase with unique site_id
+    4. Returns structured overview with site_id
+    """
+    try:
+        print(f"🚀 Starting NEW EVIKA audit for: {req.url}")
+        
+        # Generate unique site_id for this audit
+        site_id = str(uuid.uuid4())
+        print(f"📋 Generated site_id: {site_id}")
+        
+        # Ensure Supabase schema exists
+        if not ensure_schema_exists():
+            print("⚠️ Schema setup failed, continuing anyway...")
+        
+        # Step 1: Crawl website with ScrapingBee
+        print("🕷️ Starting website crawl...")
+        crawl_result = crawl_website_with_scrapingbee(req.url, max_pages=15)
+        
+        if not crawl_result.get("success", False):
+            return {
+                "error": f"Crawl failed: {crawl_result.get('error', 'Unknown error')}",
+                "site_id": site_id
+            }
+        
+        pages_data = crawl_result.get("pages", [])
+        print(f"✅ Crawled {len(pages_data)} pages")
+        
+        # Step 2: Extract signals from crawled data
+        print("🔍 Extracting AEO + GEO signals...")
+        signals = extract_signals_from_pages(pages_data)
+        
+        # Step 3: Save to Supabase
+        print("💾 Saving to Supabase...")
+        save_success = save_audit_data(site_id, req.url, pages_data, signals)
+        
+        if not save_success:
+            print("⚠️ Failed to save to Supabase, but continuing...")
+        
+        # Step 4: Return structured JSON
+        return {
+            "site_id": site_id,
+            "url": req.url,
+            "brand_name": signals.get("brand_name", ""),
+            "description": signals.get("description", ""),
+            "products": signals.get("products", []),
+            "location": signals.get("location", ""),
+            "faqs": [faq.get("question", "") for faq in signals.get("faqs", [])],
+            "topics": signals.get("topics", []),
+            "competitors": signals.get("competitors", []),
+            "pages_crawled": len(pages_data),
+            "success": True
+        }
+        
+    except Exception as e:
+        print(f"❌ NEW audit failed: {e}")
+        return {
+            "error": f"Audit failed: {str(e)}",
+            "site_id": site_id if 'site_id' in locals() else None
+        }
 

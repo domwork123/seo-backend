@@ -186,10 +186,10 @@ async def audit_legacy(req: AuditRequest = Body(...), max_pages: int = Query(50,
 
     # (optional) persist to Supabase
     try:
-    supabase.table("audits").insert({
-        "url": url,
-        "results": result
-    }).execute()
+        supabase.table("audits").insert({
+            "url": url,
+            "results": result
+        }).execute()
     except Exception:
         # Allow running without Supabase configured
         pass

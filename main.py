@@ -112,10 +112,56 @@ async def audit(req: AuditRequest = Body(...)):
         
         # Step 3: Save to Supabase
         print(f"💾 Saving to Supabase...")
-        save_success = save_audit_data(site_id, req.url, pages, signals)
         
-        if not save_success:
-            print("⚠️ Failed to save to Supabase, but continuing...")
+        try:
+            # Save site info
+            site_data = {
+                "id": site_id,
+                "url": req.url,
+                "brand_name": signals.get("brand_name", ""),
+                "description": signals.get("description", ""),
+                "location": signals.get("location", ""),
+                "industry": signals.get("industry", "")
+            }
+            
+            supabase.table("sites").insert(site_data).execute()
+            print(f"✅ Site info saved: {site_id}")
+            
+            # Save pages data
+            for page in pages:
+                page_data = {
+                    "site_id": site_id,
+                    "url": page.get("url", ""),
+                    "title": page.get("title", ""),
+                    "raw_text": page.get("raw_text", ""),
+                    "images": page.get("images", [])
+                }
+                
+                supabase.table("pages").insert(page_data).execute()
+            
+            print(f"✅ Pages saved: {len(pages)} pages")
+            
+            # Save audit results
+            audit_data = {
+                "site_id": site_id,
+                "url": req.url,
+                "results": {
+                    "faqs": signals.get("faqs", []),
+                    "schemas": signals.get("schemas", []),
+                    "alt_text_issues": signals.get("alt_text_issues", []),
+                    "geo_signals": signals.get("geo_signals", []),
+                    "competitors": signals.get("competitors", []),
+                    "products": signals.get("products", []),
+                    "topics": signals.get("topics", [])
+                }
+            }
+            
+            supabase.table("audits").insert(audit_data).execute()
+            print(f"✅ Audit data saved")
+            
+        except Exception as e:
+            print(f"❌ Error saving to Supabase: {e}")
+            print("⚠️ Continuing without saving to Supabase...")
         
         # Step 4: Return structured JSON
         return {

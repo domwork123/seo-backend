@@ -148,7 +148,7 @@ async def audit(req: AuditRequest = Body(...)):
         }
         
         try:
-            supabase.table("audit_data").insert(audit_data).execute()
+            supabase.table("audits").insert(audit_data).execute()
             print(f"💾 Audit data saved")
         except Exception as e:
             print(f"❌ Error saving audit data: {e}")

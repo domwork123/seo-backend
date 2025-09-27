@@ -538,3 +538,114 @@ async def analyze_query_visibility(url: str, queries: List[str] = None) -> Dict[
     """Standalone function for query visibility analysis"""
     analyzer = QueryAnalyzer()
     return await analyzer.analyze_website_queries(url, queries)
+
+def analyze_query_visibility_from_data(site_data: Dict, pages_data: List[Dict], audit_data: Dict, queries: List[str] = None) -> Dict[str, Any]:
+    """
+    Analyze query visibility using data from Supabase instead of crawling
+    
+    Args:
+        site_data: Site information from Supabase
+        pages_data: Pages data from Supabase  
+        audit_data: Audit data from Supabase
+        queries: Optional list of custom queries
+        
+    Returns:
+        Dict with analysis results
+    """
+    try:
+        print(f"🔍 Analyzing query visibility from stored data for: {site_data['brand_name']}")
+        
+        # Extract context from stored data
+        context = {
+            "brand_name": site_data.get("brand_name", "Unknown"),
+            "description": site_data.get("description", ""),
+            "industry": site_data.get("industry", "Unknown"),
+            "products": audit_data.get("products", []),
+            "location": site_data.get("location", ""),
+            "faq_topics": audit_data.get("faq_topics", [])
+        }
+        
+        # Generate queries if none provided
+        if not queries:
+            queries = _generate_queries_from_context(context)
+            print(f"📝 Generated {len(queries)} queries from context")
+        
+        # Analyze each query
+        results = []
+        for query in queries:
+            print(f"🔍 Analyzing query: {query}")
+            
+            # Get AI response (using fallback for now)
+            ai_answer = _get_fallback_ai_response(query)
+            
+            # Check brand mention
+            brand_mentioned = _check_brand_mention(ai_answer, context["brand_name"])
+            
+            # Extract competitors
+            competitors_mentioned = _extract_competitors(ai_answer)
+            
+            # Generate recommendation
+            if brand_mentioned and not competitors_mentioned:
+                recommendation = "Excellent! Brand is mentioned without competitors. Maintain this visibility."
+            elif brand_mentioned and competitors_mentioned:
+                recommendation = f"Brand is mentioned but competitors dominate. Create comparison content: 'Why {context['brand_name']} > {competitors_mentioned[0]}'."
+            else:
+                recommendation = f"Brand is missing from AI responses. Create content targeting: '{query}' with clear {context['brand_name']} positioning."
+            
+            results.append({
+                "query": query,
+                "ai_answer": ai_answer,
+                "brand_mentioned": brand_mentioned,
+                "competitors_mentioned": competitors_mentioned,
+                "recommendation": recommendation
+            })
+        
+        return {
+            "success": True,
+            "url": site_data["url"],
+            "context": context,
+            "queries_analyzed": len(results),
+            "results": results
+        }
+        
+    except Exception as e:
+        print(f"❌ Error analyzing from stored data: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "url": site_data.get("url", "unknown")
+        }
+
+def _generate_queries_from_context(context: Dict) -> List[str]:
+    """Generate queries based on stored context"""
+    brand_name = context.get("brand_name", "Unknown")
+    industry = context.get("industry", "Unknown")
+    
+    queries = [
+        f"What is {brand_name}?",
+        f"Is {brand_name} trustworthy?",
+        f"Best {brand_name} companies",
+        f"How does {brand_name} work?",
+        f"{brand_name} reviews"
+    ]
+    
+    return queries
+
+def _get_fallback_ai_response(query: str) -> str:
+    """Fallback AI response for testing"""
+    return f"This is a fallback response for the query: '{query}'. OpenAI integration is not available."
+
+def _check_brand_mention(text: str, brand_name: str) -> bool:
+    """Check if brand is mentioned in text"""
+    return brand_name.lower() in text.lower()
+
+def _extract_competitors(text: str) -> List[str]:
+    """Extract competitor mentions from text"""
+    # Simple extraction - look for common competitor patterns
+    competitors = []
+    words = text.split()
+    for i, word in enumerate(words):
+        if word.lower() in ["vs", "versus", "compared", "alternative", "competitor"]:
+            if i + 1 < len(words):
+                competitors.append(words[i + 1])
+    return competitors[:3]  # Limit to 3 competitors

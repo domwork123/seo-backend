@@ -18,6 +18,9 @@ from aeo_geo_audit import audit_site_aeo_geo, audit_single_page_aeo_geo
 from audit import audit_site
 from enhanced_audit import enhanced_audit_site
 from query_analyzer import analyze_query_visibility
+from audit_functions import crawl_website_with_scrapingbee, extract_signals_from_pages
+import uuid
+from datetime import datetime
 
 
 app = FastAPI()
@@ -55,12 +58,129 @@ class OptimizeRequest(BaseModel):
     limit: int = 10
 
 class QueryCheckRequest(BaseModel):
-    url: str
+    site_id: str
     queries: Optional[List[str]] = None
+
+class AuditRequest(BaseModel):
+    url: str
+    language: Optional[str] = "en"
+    max_pages: Optional[int] = 50
 
 # ---------- /audit ----------
 @app.post("/audit")
-async def audit(req: AuditRequest = Body(...), max_pages: int = Query(50, ge=1, le=200)):
+async def audit(req: AuditRequest = Body(...)):
+    """
+    EVIKA SaaS audit endpoint that:
+    1. Crawls website using ScrapingBee (15 pages max)
+    2. Extracts AEO + GEO signals from all pages
+    3. Saves everything to Supabase with unique site_id
+    4. Returns structured overview with site_id
+    """
+    try:
+        print(f"🚀 Starting EVIKA audit for: {req.url}")
+        
+        # Generate unique site_id for this audit
+        site_id = str(uuid.uuid4())
+        print(f"📋 Generated site_id: {site_id}")
+        
+        # Step 1: Crawl website with ScrapingBee (15 pages max)
+        print(f"🕷️ Crawling website with ScrapingBee...")
+        crawl_result = await crawl_website_with_scrapingbee(req.url, max_pages=15)
+        
+        if not crawl_result.get("success"):
+            return {"error": f"Crawl failed: {crawl_result.get('error', 'Unknown error')}"}
+        
+        pages = crawl_result.get("pages", [])
+        print(f"✅ Crawled {len(pages)} pages successfully")
+        
+        # Step 2: Extract signals from crawled data
+        print(f"🔍 Extracting AEO + GEO signals...")
+        signals = extract_signals_from_pages(pages)
+        
+        # Step 3: Save to Supabase
+        print(f"💾 Saving to Supabase...")
+        
+        # Save site info
+        site_info = {
+            "site_id": site_id,
+            "url": req.url,
+            "brand_name": signals.get("brand_name", "Unknown"),
+            "description": signals.get("description", ""),
+            "location": signals.get("location", ""),
+            "industry": signals.get("industry", "Unknown"),
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        try:
+            supabase.table("sites").insert(site_info).execute()
+            print(f"💾 Site info saved: {site_info['brand_name']}")
+        except Exception as e:
+            print(f"❌ Error saving site info: {e}")
+            return {"error": f"Failed to save site info: {str(e)}"}
+        
+        # Save pages
+        pages_data = []
+        for page in pages:
+            page_data = {
+                "id": str(uuid.uuid4()),
+                "site_id": site_id,
+                "url": page.get("url", ""),
+                "title": page.get("title", ""),
+                "raw_text": page.get("raw_text", ""),
+                "images": page.get("images", []),
+                "created_at": datetime.utcnow().isoformat()
+            }
+            pages_data.append(page_data)
+        
+        if pages_data:
+            try:
+                supabase.table("pages").insert(pages_data).execute()
+                print(f"💾 Pages saved: {len(pages_data)} pages")
+            except Exception as e:
+                print(f"❌ Error saving pages: {e}")
+                return {"error": f"Failed to save pages: {str(e)}"}
+        
+        # Save audit data
+        audit_data = {
+            "id": str(uuid.uuid4()),
+            "site_id": site_id,
+            "faqs": signals.get("faqs", []),
+            "schema": signals.get("schema", []),
+            "alt_text": signals.get("alt_text", []),
+            "geo_signals": signals.get("geo_signals", []),
+            "competitors": signals.get("competitors", []),
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        try:
+            supabase.table("audit_data").insert(audit_data).execute()
+            print(f"💾 Audit data saved")
+        except Exception as e:
+            print(f"❌ Error saving audit data: {e}")
+            return {"error": f"Failed to save audit data: {str(e)}"}
+        
+        # Step 4: Return structured JSON
+        return {
+            "site_id": site_id,
+            "url": req.url,
+            "brand_name": signals.get("brand_name", "Unknown"),
+            "description": signals.get("description", ""),
+            "products": signals.get("products", []),
+            "location": signals.get("location", ""),
+            "faqs": signals.get("faqs", []),
+            "topics": signals.get("topics", []),
+            "competitors": signals.get("competitors", []),
+            "pages_crawled": len(pages),
+            "success": True
+        }
+        
+    except Exception as e:
+        print(f"❌ Audit failed: {e}")
+        return {"error": f"Audit failed: {str(e)}"}
+
+# Legacy audit endpoint (keeping for backward compatibility)
+@app.post("/audit-legacy")
+async def audit_legacy(req: AuditRequest = Body(...), max_pages: int = Query(50, ge=1, le=200)):
     url = req.url
     if not url:
         return {"error": "Missing 'url'."}
@@ -809,30 +929,60 @@ async def query_check(req: QueryCheckRequest = Body(...)):
     - Analysis results with AI responses and recommendations
     """
     try:
-        url = req.url
-        queries = req.queries
+        print(f"🔍 Starting query visibility analysis for site_id: {req.site_id}")
         
-        print(f"DEBUG: Starting query check for {url}")
-        print(f"DEBUG: Custom queries provided: {queries is not None and len(queries) > 0}")
+        # Get site data from Supabase
+        try:
+            site_response = supabase.table("sites").select("*").eq("site_id", req.site_id).execute()
+            if not site_response.data:
+                return {"error": f"Site not found for site_id: {req.site_id}"}
+            
+            site_data = site_response.data[0]
+            print(f"📋 Found site: {site_data['brand_name']} ({site_data['url']})")
+            
+        except Exception as e:
+            print(f"❌ Error fetching site data: {e}")
+            return {"error": f"Failed to fetch site data: {str(e)}"}
         
-        # Analyze query visibility
-        result = await analyze_query_visibility(url, queries)
+        # Get pages data from Supabase
+        try:
+            pages_response = supabase.table("pages").select("*").eq("site_id", req.site_id).execute()
+            pages_data = pages_response.data
+            print(f"📄 Found {len(pages_data)} pages for analysis")
+            
+        except Exception as e:
+            print(f"❌ Error fetching pages data: {e}")
+            return {"error": f"Failed to fetch pages data: {str(e)}"}
         
-        print(f"DEBUG: Query check completed for {url}")
-        print(f"DEBUG: Success: {result.get('success', False)}")
-        print(f"DEBUG: Queries analyzed: {result.get('queries_analyzed', 0)}")
+        # Get audit data from Supabase
+        try:
+            audit_response = supabase.table("audit_data").select("*").eq("site_id", req.site_id).execute()
+            audit_data = audit_response.data[0] if audit_response.data else {}
+            print(f"📊 Found audit data with scores: AEO={audit_data.get('aeo_score', 0)}, GEO={audit_data.get('geo_score', 0)}")
+            
+        except Exception as e:
+            print(f"❌ Error fetching audit data: {e}")
+            return {"error": f"Failed to fetch audit data: {str(e)}"}
+        
+        # Analyze query visibility using the stored data
+        result = analyze_query_visibility_from_data(
+            site_data=site_data,
+            pages_data=pages_data,
+            audit_data=audit_data,
+            queries=req.queries
+        )
+        
+        print(f"✅ Query analysis completed for site_id: {req.site_id}")
         
         return {
-            "url": url,
+            "success": True,
+            "site_id": req.site_id,
+            "url": site_data['url'],
             "query_analysis": result,
             "analysis_type": "AI Query Visibility"
         }
         
     except Exception as e:
-        print(f"DEBUG: Query check failed for {req.url}: {e}")
-        return {
-            "error": "Query check failed", 
-            "details": str(e),
-            "url": req.url
-        }
+        print(f"❌ Query check failed: {e}")
+        return {"error": f"Query check failed: {str(e)}"}
 

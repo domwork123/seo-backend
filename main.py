@@ -459,6 +459,42 @@ async def list_sites():
         print(f"❌ List sites failed: {e}")
         return {"error": f"List sites failed: {str(e)}"}
 
+# ---------- /test-supabase ----------
+@app.get("/test-supabase")
+async def test_supabase():
+    """
+    Test Supabase connection and configuration
+    """
+    try:
+        print(f"🧪 Testing Supabase connection...")
+        
+        # Check environment variables
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+        
+        print(f"📋 Supabase URL: {'✅ Set' if supabase_url else '❌ Missing'}")
+        print(f"📋 Supabase Key: {'✅ Set' if supabase_key else '❌ Missing'}")
+        
+        # Test basic connection
+        try:
+            test_result = supabase.table("sites").select("id").limit(1).execute()
+            print(f"✅ Supabase connection successful")
+            connection_ok = True
+        except Exception as e:
+            print(f"❌ Supabase connection failed: {e}")
+            connection_ok = False
+        
+        return {
+            "supabase_url_set": bool(supabase_url),
+            "supabase_key_set": bool(supabase_key),
+            "connection_ok": connection_ok,
+            "error": str(e) if not connection_ok else None
+        }
+        
+    except Exception as e:
+        print(f"❌ Supabase test failed: {e}")
+        return {"error": f"Supabase test failed: {str(e)}"}
+
 # ---------- /optimize-llm ----------
 @app.post("/optimize-llm")
 async def optimize_llm(req: AuditRequest = Body(...)):

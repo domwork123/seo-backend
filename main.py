@@ -336,6 +336,83 @@ async def version():
 async def health():
     return {"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
 
+# ---------- /query-site ----------
+@app.get("/query-site/{site_id}")
+async def query_site(site_id: str):
+    """
+    Query saved audit data by site_id
+    """
+    try:
+        print(f"🔍 Querying site data for: {site_id}")
+        
+        # Get site info
+        try:
+            site_result = supabase.table("sites").select("*").eq("id", site_id).execute()
+            site_data = site_result.data[0] if site_result.data else None
+            print(f"📋 Site data found: {site_data is not None}")
+        except Exception as e:
+            print(f"❌ Error querying site: {e}")
+            site_data = None
+        
+        # Get pages data
+        try:
+            pages_result = supabase.table("pages").select("*").eq("site_id", site_id).execute()
+            pages_data = pages_result.data if pages_result.data else []
+            print(f"📄 Pages data found: {len(pages_data)} pages")
+        except Exception as e:
+            print(f"❌ Error querying pages: {e}")
+            pages_data = []
+        
+        # Get audit results
+        try:
+            audit_result = supabase.table("audits").select("*").eq("site_id", site_id).execute()
+            audit_data = audit_result.data[0] if audit_result.data else None
+            print(f"📊 Audit data found: {audit_data is not None}")
+        except Exception as e:
+            print(f"❌ Error querying audit: {e}")
+            audit_data = None
+        
+        return {
+            "site_id": site_id,
+            "site_data": site_data,
+            "pages_count": len(pages_data),
+            "pages_data": pages_data,
+            "audit_data": audit_data,
+            "success": site_data is not None or len(pages_data) > 0 or audit_data is not None
+        }
+        
+    except Exception as e:
+        print(f"❌ Query failed: {e}")
+        return {"error": f"Query failed: {str(e)}", "site_id": site_id}
+
+# ---------- /list-sites ----------
+@app.get("/list-sites")
+async def list_sites():
+    """
+    List all saved sites
+    """
+    try:
+        print(f"📋 Listing all sites...")
+        
+        # Get all sites
+        try:
+            sites_result = supabase.table("sites").select("*").order("created_at", desc=True).limit(10).execute()
+            sites_data = sites_result.data if sites_result.data else []
+            print(f"✅ Found {len(sites_data)} sites")
+        except Exception as e:
+            print(f"❌ Error listing sites: {e}")
+            sites_data = []
+        
+        return {
+            "sites": sites_data,
+            "count": len(sites_data),
+            "success": True
+        }
+        
+    except Exception as e:
+        print(f"❌ List sites failed: {e}")
+        return {"error": f"List sites failed: {str(e)}"}
+
 # ---------- /optimize-llm ----------
 @app.post("/optimize-llm")
 async def optimize_llm(req: AuditRequest = Body(...)):

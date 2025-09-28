@@ -21,6 +21,7 @@ from query_analyzer import analyze_query_visibility
 from scrapingbee_crawler import crawl_website_with_scrapingbee
 from signal_extractor import extract_signals_from_pages
 from supabase_schema import ensure_schema_exists, save_audit_data
+from blog_generator import BlogGenerator
 import uuid
 from datetime import datetime
 
@@ -65,6 +66,13 @@ class OptimizeRequest(BaseModel):
 class QueryCheckRequest(BaseModel):
     site_id: str
     queries: Optional[List[str]] = None
+
+class BlogRequest(BaseModel):
+    brand_name: str
+    target_keyword: str
+    language: Optional[str] = "en"
+    mode: Optional[str] = "AEO"  # AEO or GEO
+    context: Optional[Dict[str, Any]] = None
 
 class AuditRequest(BaseModel):
     url: str
@@ -494,6 +502,50 @@ async def test_supabase():
     except Exception as e:
         print(f"❌ Supabase test failed: {e}")
         return {"error": f"Supabase test failed: {str(e)}"}
+
+# ---------- /generate-blog ----------
+@app.post("/generate-blog")
+async def generate_blog(req: BlogRequest = Body(...)):
+    """
+    Generate AEO or GEO optimized blog content
+    
+    Input:
+    - brand_name: Name of the brand
+    - target_keyword: Target keyword for SEO
+    - language: Language code (default: en)
+    - mode: AEO or GEO (default: AEO)
+    - context: Additional context from audit data
+    
+    Output:
+    - Complete blog post with JSON-LD schema markup
+    """
+    try:
+        print(f"📝 Generating {req.mode} blog post for {req.brand_name}")
+        print(f"🎯 Target keyword: {req.target_keyword}")
+        print(f"🌍 Language: {req.language}")
+        
+        # Initialize blog generator
+        generator = BlogGenerator()
+        
+        # Generate blog post
+        blog_post = generator.generate_blog_post(
+            brand_name=req.brand_name,
+            target_keyword=req.target_keyword,
+            language=req.language,
+            mode=req.mode,
+            context=req.context
+        )
+        
+        print(f"✅ Blog post generated successfully")
+        print(f"📊 Word count: {blog_post['word_count']}")
+        print(f"📋 Sections: {len(blog_post['sections'])}")
+        print(f"❓ FAQs: {len(blog_post['faqs'])}")
+        
+        return blog_post
+        
+    except Exception as e:
+        print(f"❌ Blog generation failed: {e}")
+        return {"error": f"Blog generation failed: {str(e)}"}
 
 # ---------- /optimize-llm ----------
 @app.post("/optimize-llm")

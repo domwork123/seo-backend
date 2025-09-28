@@ -83,6 +83,323 @@ def get_site_language(site_id: str) -> str:
         print(f"Error fetching site language: {e}")
     return "en"
 
+async def get_comprehensive_site_data(site_id: str) -> Dict[str, Any]:
+    """Get comprehensive site data for recommendation generation"""
+    try:
+        print(f"🔍 Fetching comprehensive site data for: {site_id}")
+        
+        # Get site basic info
+        site_result = supabase.table("sites").select("*").eq("id", site_id).execute()
+        if not site_result.data:
+            print(f"❌ Site not found: {site_id}")
+            return None
+        
+        site_data = site_result.data[0]
+        print(f"✅ Site data found: {site_data.get('brand_name', 'Unknown')}")
+        
+        # Get pages data
+        pages_result = supabase.table("pages").select("*").eq("site_id", site_id).limit(10).execute()
+        pages_data = pages_result.data if pages_result.data else []
+        print(f"📄 Pages data found: {len(pages_data)} pages")
+        
+        # Get audit data
+        audit_result = supabase.table("audits").select("*").eq("site_id", site_id).order("created_at", desc=True).limit(1).execute()
+        audit_data = audit_result.data[0] if audit_result.data else {}
+        print(f"📊 Audit data found: {bool(audit_data)}")
+        
+        # Extract key information
+        return {
+            "site_info": {
+                "id": site_data.get("id"),
+                "url": site_data.get("url"),
+                "brand_name": site_data.get("brand_name"),
+                "description": site_data.get("description"),
+                "location": site_data.get("location"),
+                "industry": site_data.get("industry"),
+                "language": site_data.get("language", "en")
+            },
+            "pages": pages_data,
+            "audit_data": {
+                "faqs": audit_data.get("faqs", []),
+                "products": audit_data.get("products", []),
+                "competitors": audit_data.get("competitors", []),
+                "topics": audit_data.get("topics", []),
+                "geo_signals": audit_data.get("geo_signals", {}),
+                "alt_text_issues": audit_data.get("alt_text", [])
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Error fetching comprehensive site data: {e}")
+        return None
+
+def generate_aeo_recommendations(site_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate AEO-optimized keyword and question recommendations"""
+    
+    site_info = site_data["site_info"]
+    audit_data = site_data["audit_data"]
+    
+    keywords = []
+    questions = []
+    
+    print(f"🎯 Generating AEO recommendations for: {site_info['brand_name']}")
+    
+    # AEO KEYWORDS - Focus on answerability and search intent
+    
+    # 1. Brand Authority Keywords
+    if site_info["brand_name"]:
+        keywords.extend([
+            {
+                "keyword": f"what is {site_info['brand_name']}",
+                "type": "brand_question",
+                "search_volume": "high",
+                "difficulty": "easy",
+                "intent": "informational",
+                "seo_potential": "high",
+                "category": "brand_authority"
+            },
+            {
+                "keyword": f"how does {site_info['brand_name']} work",
+                "type": "process_question",
+                "search_volume": "medium",
+                "difficulty": "medium",
+                "intent": "informational",
+                "seo_potential": "high",
+                "category": "brand_authority"
+            }
+        ])
+    
+    # 2. Product/Service Keywords
+    for product in audit_data["products"][:3]:  # Limit to top 3 products
+        keywords.extend([
+            {
+                "keyword": f"best {product}",
+                "type": "product_comparison",
+                "search_volume": "high",
+                "difficulty": "medium",
+                "intent": "commercial",
+                "seo_potential": "high",
+                "category": "product_optimization"
+            },
+            {
+                "keyword": f"{product} guide",
+                "type": "product_guide",
+                "search_volume": "medium",
+                "difficulty": "easy",
+                "intent": "informational",
+                "seo_potential": "high",
+                "category": "product_optimization"
+            }
+        ])
+    
+    # 3. Problem-Solution Keywords
+    if site_info["industry"]:
+        keywords.extend([
+            {
+                "keyword": f"how to solve {site_info['industry']} problems",
+                "type": "problem_solution",
+                "search_volume": "medium",
+                "difficulty": "medium",
+                "intent": "informational",
+                "seo_potential": "high",
+                "category": "problem_solving"
+            }
+        ])
+    
+    # AEO QUESTIONS - People Also Ask style
+    
+    # 1. How-to Questions
+    for product in audit_data["products"][:2]:
+        questions.extend([
+            {
+                "question": f"How to choose the best {product}?",
+                "type": "how_to",
+                "search_volume": "high",
+                "difficulty": "medium",
+                "intent": "informational",
+                "seo_potential": "high",
+                "category": "tutorial"
+            },
+            {
+                "question": f"What to look for in {product}?",
+                "type": "evaluation",
+                "search_volume": "medium",
+                "difficulty": "easy",
+                "intent": "informational",
+                "seo_potential": "high",
+                "category": "evaluation"
+            }
+        ])
+    
+    # 2. Comparison Questions
+    if audit_data["competitors"]:
+        competitor = audit_data["competitors"][0]
+        questions.append({
+            "question": f"What makes {site_info['brand_name']} better than {competitor}?",
+            "type": "comparison",
+            "search_volume": "medium",
+            "difficulty": "hard",
+            "intent": "comparison",
+            "seo_potential": "medium",
+            "category": "competitive_analysis"
+        })
+    
+    # 3. Problem-Solution Questions
+    questions.extend([
+        {
+            "question": f"What are the common {site_info['industry']} challenges?",
+            "type": "problem_identification",
+            "search_volume": "high",
+            "difficulty": "easy",
+            "intent": "informational",
+            "seo_potential": "high",
+            "category": "problem_solving"
+        }
+    ])
+    
+    print(f"✅ Generated {len(keywords)} AEO keywords and {len(questions)} AEO questions")
+    
+    return {
+        "keywords": keywords[:6],  # Limit to 6 keywords
+        "questions": questions[:5],  # Limit to 5 questions
+        "mode": "AEO",
+        "focus": "answerability_and_search_intent",
+        "total_recommendations": len(keywords) + len(questions)
+    }
+
+def generate_geo_recommendations(site_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate GEO-optimized keyword and question recommendations"""
+    
+    site_info = site_data["site_info"]
+    audit_data = site_data["audit_data"]
+    
+    keywords = []
+    questions = []
+    
+    print(f"🌍 Generating GEO recommendations for: {site_info['brand_name']} in {site_info['location']}")
+    
+    # GEO KEYWORDS - Focus on local search and location-based intent
+    
+    # 1. Local Brand Keywords
+    if site_info["brand_name"] and site_info["location"]:
+        keywords.extend([
+            {
+                "keyword": f"{site_info['brand_name']} in {site_info['location']}",
+                "type": "local_brand",
+                "search_volume": "medium",
+                "difficulty": "easy",
+                "intent": "local",
+                "seo_potential": "high",
+                "category": "local_brand"
+            },
+            {
+                "keyword": f"best {site_info['brand_name']} {site_info['location']}",
+                "type": "local_best",
+                "search_volume": "medium",
+                "difficulty": "medium",
+                "intent": "local_commercial",
+                "seo_potential": "high",
+                "category": "local_brand"
+            }
+        ])
+    
+    # 2. Local Service Keywords
+    if site_info["location"]:
+        for product in audit_data["products"][:2]:
+            keywords.extend([
+                {
+                    "keyword": f"{product} in {site_info['location']}",
+                    "type": "local_service",
+                    "search_volume": "medium",
+                    "difficulty": "easy",
+                    "intent": "local",
+                    "seo_potential": "high",
+                    "category": "local_service"
+                },
+                {
+                    "keyword": f"local {product} {site_info['location']}",
+                    "type": "local_search",
+                    "search_volume": "low",
+                    "difficulty": "easy",
+                    "intent": "local",
+                    "seo_potential": "medium",
+                    "category": "local_service"
+                }
+            ])
+    
+    # 3. Local Comparison Keywords
+    if audit_data["competitors"] and site_info["location"]:
+        competitor = audit_data["competitors"][0]
+        keywords.append({
+            "keyword": f"{site_info['brand_name']} vs {competitor} {site_info['location']}",
+            "type": "local_comparison",
+            "search_volume": "low",
+            "difficulty": "hard",
+            "intent": "local_comparison",
+            "seo_potential": "medium",
+            "category": "local_competitive"
+        })
+    
+    # GEO QUESTIONS - Local search intent
+    
+    # 1. Local Service Questions
+    if site_info["location"]:
+        questions.extend([
+            {
+                "question": f"Where to find {site_info['brand_name']} in {site_info['location']}?",
+                "type": "local_where",
+                "search_volume": "medium",
+                "difficulty": "easy",
+                "intent": "local",
+                "seo_potential": "high",
+                "category": "local_discovery"
+            },
+            {
+                "question": f"Best {site_info['industry']} services in {site_info['location']}?",
+                "type": "local_best",
+                "search_volume": "high",
+                "difficulty": "medium",
+                "intent": "local_commercial",
+                "seo_potential": "high",
+                "category": "local_services"
+            }
+        ])
+    
+    # 2. Local Experience Questions
+    questions.extend([
+        {
+            "question": f"What to expect from {site_info['brand_name']} in {site_info['location']}?",
+            "type": "local_experience",
+            "search_volume": "low",
+            "difficulty": "easy",
+            "intent": "local_informational",
+            "seo_potential": "medium",
+            "category": "local_experience"
+        }
+    ])
+    
+    # 3. Local Problem-Solution Questions
+    if site_info["location"]:
+        questions.append({
+            "question": f"Common {site_info['industry']} issues in {site_info['location']}?",
+            "type": "local_problems",
+            "search_volume": "medium",
+            "difficulty": "easy",
+            "intent": "local_informational",
+            "seo_potential": "high",
+            "category": "local_problem_solving"
+        })
+    
+    print(f"✅ Generated {len(keywords)} GEO keywords and {len(questions)} GEO questions")
+    
+    return {
+        "keywords": keywords[:6],  # Limit to 6 keywords
+        "questions": questions[:5],  # Limit to 5 questions
+        "mode": "GEO",
+        "focus": "local_search_and_location_intent",
+        "total_recommendations": len(keywords) + len(questions)
+    }
+
 # ---------- models ----------
 class AuditRequest(BaseModel):
     url: str
@@ -113,6 +430,13 @@ class BlogRequest(BaseModel):
     mode: Optional[str] = "AEO"  # AEO or GEO
     context: Optional[Dict[str, Any]] = None
     site_id: Optional[str] = None  # For fetching site language from Supabase
+
+class KeywordRecommendationRequest(BaseModel):
+    site_id: str
+    mode: Optional[str] = "both"  # "AEO", "GEO", or "both"
+    language: Optional[str] = "en"
+    max_keywords: Optional[int] = 6
+    max_questions: Optional[int] = 5
 
 class AuditRequest(BaseModel):
     url: str
@@ -542,6 +866,49 @@ async def test_supabase():
     except Exception as e:
         print(f"❌ Supabase test failed: {e}")
         return {"error": f"Supabase test failed: {str(e)}"}
+
+# ---------- /recommend-keywords ----------
+@app.post("/recommend-keywords")
+async def recommend_keywords(req: KeywordRecommendationRequest = Body(...)):
+    """
+    Generate smart keyword and question recommendations
+    for AEO and GEO blog post optimization
+    """
+    try:
+        print(f"🎯 Generating recommendations for site: {req.site_id}")
+        print(f"📊 Mode: {req.mode}")
+        
+        # Get comprehensive site data
+        site_data = await get_comprehensive_site_data(req.site_id)
+        
+        if not site_data:
+            return {"error": "Site not found", "message": "Please audit a website first"}
+        
+        # Generate mode-specific recommendations
+        if req.mode == "AEO":
+            recommendations = generate_aeo_recommendations(site_data)
+        elif req.mode == "GEO":
+            recommendations = generate_geo_recommendations(site_data)
+        else:
+            # Return both for mode selection
+            recommendations = {
+                "aeo": generate_aeo_recommendations(site_data),
+                "geo": generate_geo_recommendations(site_data)
+            }
+        
+        print(f"✅ Generated {len(recommendations.get('keywords', []))} keywords and {len(recommendations.get('questions', []))} questions")
+        
+        return {
+            "success": True,
+            "site_id": req.site_id,
+            "mode": req.mode,
+            "recommendations": recommendations,
+            "generated_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Recommendation generation failed: {str(e)}")
+        return {"error": f"Recommendation generation failed: {str(e)}"}
 
 # ---------- /generate-blog ----------
 @app.post("/generate-blog")

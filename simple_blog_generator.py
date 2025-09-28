@@ -144,6 +144,15 @@ class SimpleBlogGenerator:
         - Keep sentences concise; favor bullets; avoid fluff
 
         GEO RULES:
+        - Word Count: ALWAYS 1200–1500 words for GEO mode
+        - Local Context: Mention specific city landmarks, neighborhoods, or shopping centers
+          Example: "Mobilus Detailing klientai iš Šilainių ir Petrašiūnų dažnai renkasi mūsų paslaugas, nes nereikia važiuoti į plovyklą Akropolyje."
+        - Competitor Layer: Compare brand vs. typical local competitors
+          Example: "Skirtingai nei automatinės plovyklos prie Kauno Akropolio…"
+        - Expanded FAQs: Must include "cheapest option", "availability in specific neighborhoods", "special conditions (weekends/winter)", "on-site service"
+        - LocalBusiness Schema: Return JSON-LD with brand name, city address (from Supabase data), and contact info
+        - Images: At least 3, with alt text including city + brand
+          Example: "Mobilus Detailing specialistas plauna automobilį Laisvės alėjoje Kaune."
         - Mention city and landmarks naturally (detect from target keyword)
         - Compare online vs local store experience; explain benefits of the brand in that city
         - Include LocalBusiness JSON-LD with whatever verified NAP data you have (or leave fields empty/null if unknown—never invent)
@@ -163,7 +172,7 @@ class SimpleBlogGenerator:
         - word_count
         - sections (array of {{title, content}})
         - faqs (array of {{question, answer}})
-        - images (array of {{alt, src, caption}})
+        - images (array of {{alt, src, caption}}) - MINIMUM 3 for GEO mode
         - internal_links (array of {{text, url, anchor}})
         - json_ld (object with article and optionally local_business)
         - mode

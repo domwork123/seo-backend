@@ -27,7 +27,7 @@ def crawl_website_with_scrapingbee(url: str, max_pages: int = 15) -> Dict[str, A
     """
     
     # ⚠️ DEVELOPMENT MODE: Skip ScrapingBee to save credits
-    if os.getenv("DEVELOPMENT_MODE", "true").lower() == "true":
+    if os.getenv("DEVELOPMENT_MODE", "false").lower() == "true":
         print("🔧 DEVELOPMENT MODE: Using mock data instead of ScrapingBee")
         return _get_mock_crawl_data(url)
     

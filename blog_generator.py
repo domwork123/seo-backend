@@ -202,33 +202,61 @@ class BlogGenerator:
         ]
     
     def _generate_aeo_faqs(self) -> List[Dict[str, str]]:
-        """Generate AEO-optimized FAQs based on real user intent"""
-        return [
-            {
-                "question": f"What are the best options for {self.target_keyword}?",
-                "answer": f"When looking for the best options, {self.brand_name} recommends considering quality, price, and availability. We offer a wide range of options to suit different budgets and preferences, with expert guidance to help you choose."
-            },
-            {
-                "question": f"How much should I expect to pay?",
-                "answer": f"Prices vary depending on quality and brand. {self.brand_name} offers competitive pricing with transparent quotes. We have options for every budget, from affordable choices to premium selections, ensuring you get the best value."
-            },
-            {
-                "question": f"Are there any authentic options available?",
-                "answer": f"Yes, {self.brand_name} guarantees authenticity for all our products. We work directly with verified suppliers and provide certificates of authenticity. Our reputation is built on trust and quality assurance."
-            },
-            {
-                "question": f"Can I test before buying?",
-                "answer": f"Absolutely! {self.brand_name} offers testing opportunities so you can try before you buy. We understand the importance of finding the right fit, and our experts are available to guide you through the testing process."
-            },
-            {
-                "question": f"What about niche or specialty options?",
-                "answer": f"{self.brand_name} specializes in both popular and niche options. We have access to exclusive collections and can help you find unique items that aren't available elsewhere. Our experts know the market inside and out."
-            },
-            {
-                "question": f"Where can I find the cheapest options?",
-                "answer": f"For budget-conscious shoppers, {self.brand_name} offers several affordable options without compromising quality. We regularly have sales and special offers, and our team can help you find the best deals available."
-            }
-        ]
+        """Generate AEO-optimized FAQs based on real user intent with Lithuanian People Also Ask style"""
+        if self.language.startswith('lt'):
+            return [
+                {
+                    "question": f"Kur pigiausia pirkti kvepalus Vilniuje?",
+                    "answer": f"Geriausios kainos kvepalams Vilniuje randamos {self.brand_name} parduotuvėse. Mes siūlome konkurencingas kainas su skaidriais įkainiais. Turime variantų kiekvienam biudžetui - nuo prieinamų iki premium pasirinkimų."
+                },
+                {
+                    "question": f"Ar galima nusipirkti kvepalų testerius?",
+                    "answer": f"Taip! {self.brand_name} siūlo kvepalų testerių galimybes, kad galėtumėte išbandyti prieš pirkdami. Suprantame, kaip svarbu rasti tinkamą variantą, ir mūsų ekspertai padės jums per visą procesą."
+                },
+                {
+                    "question": f"Kur gauti nišinius kvepalus Vilniuje?",
+                    "answer": f"{self.brand_name} specializuojasi tiek populiarių, tiek nišinių kvepalų srityje. Turime prieigą prie ekskluzyvių kolekcijų ir galime padėti rasti unikalius kvepalus, kurių nėra kitur. Mūsų ekspertai puikiai žino rinką."
+                },
+                {
+                    "question": f"Ar visi kvepalai autentiški?",
+                    "answer": f"Taip, {self.brand_name} garantuoja visų mūsų produktų autentiškumą. Dirbame tiesiogiai su patikrintais tiekėjais ir teikiame autentiškumo sertifikatus. Mūsų reputacija remiasi pasitikėjimu ir kokybės užtikrinimu."
+                },
+                {
+                    "question": f"Kur geriausia kvepalų pasirinkimas Vilniuje?",
+                    "answer": f"Geriausias kvepalų pasirinkimas Vilniuje yra {self.brand_name} parduotuvėse. Siūlome platų asortimentą, tinkantį skirtingiems biudžetams ir skoniams, su ekspertų vadovavimu, kuris padės jums pasirinkti."
+                },
+                {
+                    "question": f"Kada geriausia laikas pirkti kvepalus?",
+                    "answer": f"Geriausias laikas pirkti kvepalus yra per {self.brand_name} akcijas ir specialius pasiūlymus. Reguliariai organizuojame nuolaidas ir sezoninius pasiūlymus, kurie puikiai tinka Vilniaus pirkėjams."
+                }
+            ]
+        else:  # English fallback
+            return [
+                {
+                    "question": f"What are the best options for {self.target_keyword}?",
+                    "answer": f"When looking for the best options, {self.brand_name} recommends considering quality, price, and availability. We offer a wide range of options to suit different budgets and preferences, with expert guidance to help you choose."
+                },
+                {
+                    "question": f"How much should I expect to pay?",
+                    "answer": f"Prices vary depending on quality and brand. {self.brand_name} offers competitive pricing with transparent quotes. We have options for every budget, from affordable choices to premium selections, ensuring you get the best value."
+                },
+                {
+                    "question": f"Are there any authentic options available?",
+                    "answer": f"Yes, {self.brand_name} guarantees authenticity for all our products. We work directly with verified suppliers and provide certificates of authenticity. Our reputation is built on trust and quality assurance."
+                },
+                {
+                    "question": f"Can I test before buying?",
+                    "answer": f"Absolutely! {self.brand_name} offers testing opportunities so you can try before you buy. We understand the importance of finding the right fit, and our experts are available to guide you through the testing process."
+                },
+                {
+                    "question": f"What about niche or specialty options?",
+                    "answer": f"{self.brand_name} specializes in both popular and niche options. We have access to exclusive collections and can help you find unique items that aren't available elsewhere. Our experts know the market inside and out."
+                },
+                {
+                    "question": f"Where can I find the cheapest options?",
+                    "answer": f"For budget-conscious shoppers, {self.brand_name} offers several affordable options without compromising quality. We regularly have sales and special offers, and our team can help you find the best deals available."
+                }
+            ]
     
     def _generate_geo_faqs(self) -> List[Dict[str, str]]:
         """Generate GEO-optimized FAQs with local references"""
@@ -262,46 +290,82 @@ class BlogGenerator:
         ]
     
     def _generate_images(self) -> List[Dict[str, str]]:
-        """Generate image suggestions (≥2)"""
-        return [
-            {
-                "alt": f"{self.target_keyword} overview image",
-                "src": f"/images/{self.target_keyword.lower().replace(' ', '-')}-overview.jpg",
-                "caption": f"Comprehensive guide to {self.target_keyword}"
-            },
-            {
-                "alt": f"{self.brand_name} {self.target_keyword} services",
-                "src": f"/images/{self.brand_name.lower().replace(' ', '-')}-services.jpg",
-                "caption": f"{self.brand_name} professional {self.target_keyword} services"
-            }
-        ]
+        """Generate image suggestions (≥2) with localized alt text"""
+        if self.language.startswith('lt'):
+            return [
+                {
+                    "alt": f"{self.target_keyword} vadovas Vilniuje",
+                    "src": f"/images/{self.target_keyword.lower().replace(' ', '-')}-overview.jpg",
+                    "caption": f"Išsamus {self.target_keyword} vadovas"
+                },
+                {
+                    "alt": f"{self.brand_name} kvepalų parduotuvė Vilniuje",
+                    "src": f"/images/{self.brand_name.lower().replace(' ', '-')}-services.jpg",
+                    "caption": f"{self.brand_name} profesionalūs kvepalų paslaugos Vilniuje"
+                }
+            ]
+        else:
+            return [
+                {
+                    "alt": f"{self.target_keyword} overview image",
+                    "src": f"/images/{self.target_keyword.lower().replace(' ', '-')}-overview.jpg",
+                    "caption": f"Comprehensive guide to {self.target_keyword}"
+                },
+                {
+                    "alt": f"{self.brand_name} {self.target_keyword} services",
+                    "src": f"/images/{self.brand_name.lower().replace(' ', '-')}-services.jpg",
+                    "caption": f"{self.brand_name} professional {self.target_keyword} services"
+                }
+            ]
     
     def _generate_internal_links(self) -> List[Dict[str, str]]:
-        """Generate internal links (≥2)"""
-        return [
-            {
-                "text": f"Learn more about {self.brand_name} services",
-                "url": "/services",
-                "anchor": "our-services"
-            },
-            {
-                "text": f"Contact {self.brand_name} for consultation",
-                "url": "/contact",
-                "anchor": "get-in-touch"
-            }
-        ]
+        """Generate internal links (≥2) with localized anchor text"""
+        if self.language.startswith('lt'):
+            return [
+                {
+                    "text": f"Sužinokite daugiau apie {self.brand_name} paslaugas",
+                    "url": "/services",
+                    "anchor": "mūsų-paslaugos"
+                },
+                {
+                    "text": f"Susisiekite su {self.brand_name} konsultacijai",
+                    "url": "/contact",
+                    "anchor": "susisiekite-su-mumis"
+                }
+            ]
+        else:
+            return [
+                {
+                    "text": f"Learn more about {self.brand_name} services",
+                    "url": "/services",
+                    "anchor": "our-services"
+                },
+                {
+                    "text": f"Contact {self.brand_name} for consultation",
+                    "url": "/contact",
+                    "anchor": "get-in-touch"
+                }
+            ]
     
     def _generate_aeo_content_text(self, sections: List[Dict], faqs: List[Dict]) -> str:
-        """Generate AEO-optimized content text (1000+ words)"""
+        """Generate AEO-optimized content text (1000-1200 words)"""
         
         localized = self._get_localized_content()
         
         content = f"# {self.target_keyword}: Complete Guide\n\n"
-        content += f"{localized['intro_prefix']} {self.target_keyword}. {self.brand_name} teikia ekspertų patarimus, kurie padės suprasti viską apie šią svarbią temą."
+        
+        # Start with local problem statement, not generic greeting
+        if self.language.startswith('lt'):
+            content += f"{localized['intro_prefix']}. {self.brand_name} teikia ekspertų patarimus, kurie padės rasti geriausias kvepalų pirkimo galimybes Vilniuje."
+        else:
+            content += f"{localized['intro_prefix']}. {self.brand_name} provides expert guidance to help you find the best options."
         
         # Add city mention for AEO (light GEO tie-in)
         if self.site_city:
-            content += f" Šiame vadove aptarsime geriausias {self.target_keyword} galimybes {self.site_city} ir apylinkėse.\n\n"
+            if self.language.startswith('lt'):
+                content += f" Šiame vadove aptarsime geriausias {self.target_keyword} galimybes {self.site_city} ir apylinkėse.\n\n"
+            else:
+                content += f" This guide covers the best {self.target_keyword} options in {self.site_city} and surrounding areas.\n\n"
         else:
             content += "\n\n"
         
@@ -319,7 +383,7 @@ class BlogGenerator:
         content += f"## {localized['conclusion']}\n\n"
         content += f"Suprasti {self.target_keyword} yra labai svarbu priimant pagrįstus sprendimus. {self.brand_name} yra jūsų patikimas partneris, teikiantis ekspertų patarimus ir profesionalias paslaugas.\n\n"
         
-        # Ensure minimum word count (1000 for AEO)
+        # Ensure minimum word count (1000-1200 for AEO)
         content = self._ensure_word_count(content, 1000)
         
         return content
@@ -345,7 +409,7 @@ class BlogGenerator:
         content += f"## Conclusion\n\n"
         content += f"Make the most of {self.target_keyword} in {city} with our local guide. {self.brand_name} is your trusted partner in {city}.\n\n"
         
-        # Ensure minimum word count (1200 for GEO)
+        # Ensure minimum word count (1200-1500 for GEO)
         content = self._ensure_word_count(content, 1200)
         
         return content
@@ -441,24 +505,30 @@ class BlogGenerator:
         return "Akropolis, Panorama, Gedimino pr."
     
     def _get_localized_content(self) -> Dict[str, str]:
-        """Get localized content based on language"""
+        """Get localized content based on language with proper Lithuanian examples"""
         if self.language.startswith('lt'):
             return {
                 'faq_heading': 'Dažniausiai užduodami klausimai',
                 'conclusion': 'Išvados',
-                'intro_prefix': 'Sveiki atvykę į mūsų išsamų vadovą apie',
+                'intro_prefix': 'Vilniaus pirkėjai dažnai klausia, kur geriausia įsigyti originalius kvepalus',
                 'benefits_heading': 'Pagrindiniai privalumai',
                 'comparison_heading': 'Palyginimas',
-                'tips_heading': 'Patarimai ir rekomendacijos'
+                'tips_heading': 'Patarimai ir rekomendacijos',
+                'quality_heading': 'Kokybės vertinimas',
+                'value_heading': 'Vertės palyginimas',
+                'expert_heading': 'Ekspertų rekomendacijos'
             }
         else:  # Default to English
             return {
                 'faq_heading': 'Frequently Asked Questions',
                 'conclusion': 'Conclusion',
-                'intro_prefix': 'Welcome to our comprehensive guide on',
+                'intro_prefix': 'Local buyers often ask where to find authentic products',
                 'benefits_heading': 'Key Benefits',
                 'comparison_heading': 'Comparison',
-                'tips_heading': 'Tips and Recommendations'
+                'tips_heading': 'Tips and Recommendations',
+                'quality_heading': 'Quality Assessment',
+                'value_heading': 'Value Comparison',
+                'expert_heading': 'Expert Recommendations'
             }
     
     def _ensure_word_count(self, content: str, min_words: int) -> str:

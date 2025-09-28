@@ -591,12 +591,40 @@ class BlogGenerator:
         }
     
     def _get_city_name(self) -> str:
-        """Get city name for GEO content"""
-        return "Vilnius"  # Default city
+        """Get city name from context or detect from target keyword"""
+        if self.context and 'location' in self.context:
+            return self.context['location']
+        
+        # Try to detect city from target keyword
+        target_lower = self.target_keyword.lower()
+        if 'kaune' in target_lower or 'kaunas' in target_lower:
+            return "Kaunas"
+        elif 'vilniuje' in target_lower or 'vilnius' in target_lower:
+            return "Vilnius"
+        elif 'klaipėdoje' in target_lower or 'klaipeda' in target_lower:
+            return "Klaipėda"
+        elif 'šiauliuose' in target_lower or 'siauliai' in target_lower:
+            return "Šiauliai"
+        elif 'panevėžyje' in target_lower or 'panevezys' in target_lower:
+            return "Panevėžys"
+        
+        return "Vilnius"  # Default fallback
     
     def _get_landmarks(self) -> str:
-        """Get local landmarks for GEO content"""
-        return "Akropolis, Panorama, Gedimino pr."
+        """Get local landmarks for GEO content based on city"""
+        city = self._get_city_name()
+        if city == "Kaunas":
+            return "Akropolis, Mega, Laisvės alėja"
+        elif city == "Vilnius":
+            return "Akropolis, Panorama, Gedimino pr."
+        elif city == "Klaipėda":
+            return "Akropolis, Švyturys, Tiltų g."
+        elif city == "Šiauliai":
+            return "Saulės miestas, Tilžės g., Vilniaus g."
+        elif city == "Panevėžys":
+            return "Akropolis, Respublikos g., Smėlynės g."
+        else:
+            return "Akropolis, Panorama, Gedimino pr."  # Default
     
     def _get_localized_content(self) -> Dict[str, str]:
         """Get localized content based on language with proper Lithuanian examples"""

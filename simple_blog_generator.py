@@ -161,7 +161,7 @@ class SimpleBlogGenerator:
         - meta_description
         - content (full markdown)
         - word_count
-        - sections (array of {heading, content})
+        - sections (array of {title, content})
         - faqs (array of {question, answer})
         - images (array of {alt, src, caption})
         - internal_links (array of {text, url, anchor})

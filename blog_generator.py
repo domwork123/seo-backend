@@ -142,33 +142,61 @@ class BlogGenerator:
         }
     
     def _generate_aeo_sections(self) -> List[Dict[str, str]]:
-        """Generate AEO-optimized sections with expanded content"""
-        return [
-            {
-                "heading": f"What is {self.target_keyword}?",
-                "content": f"Understanding {self.target_keyword} is essential for making informed decisions. {self.brand_name} provides comprehensive insights into this topic. This guide covers everything you need to know about finding the best options, comparing prices, and making smart choices."
-            },
-            {
-                "heading": f"Key Benefits of {self.target_keyword}",
-                "content": f"Discover the advantages of {self.target_keyword} and how it can benefit you. Our experts at {self.brand_name} have identified the most important benefits including quality, convenience, and value. We'll explore each benefit in detail with real examples and comparisons."
-            },
-            {
-                "heading": f"Comparison: {self.target_keyword} vs Alternatives",
-                "content": f"Compare {self.target_keyword} with other options to make the best choice. {self.brand_name} offers detailed comparisons to help you decide. We'll look at price differences, quality variations, and availability across different options."
-            },
-            {
-                "heading": f"How to Choose the Right {self.target_keyword}",
-                "content": f"Learn the criteria for selecting the best {self.target_keyword} for your needs. {self.brand_name} provides expert guidance on factors like budget, quality, and personal preferences. We'll provide a step-by-step guide to help you make the right decision."
-            },
-            {
-                "heading": f"Tips and Recommendations",
-                "content": f"Get expert tips and recommendations for {self.target_keyword}. {self.brand_name} shares insider knowledge about what to look for, common mistakes to avoid, and how to get the best value for your money."
-            },
-            {
-                "heading": f"Conclusion: {self.target_keyword} Guide",
-                "content": f"Make informed decisions about {self.target_keyword} with our comprehensive guide. {self.brand_name} is your trusted source for expert insights and professional recommendations."
-            }
-        ]
+        """Generate AEO-optimized sections with expanded content in target language"""
+        if self.language.startswith('lt'):
+            return [
+                {
+                    "heading": f"Kas yra {self.target_keyword}?",
+                    "content": f"Suprasti {self.target_keyword} yra labai svarbu priimant pagrįstus sprendimus. {self.brand_name} teikia išsamius patarimus šia tema. Šis vadovas apima viską, ką reikia žinoti apie geriausių variantų paiešką, kainų palyginimą ir protingus sprendimus."
+                },
+                {
+                    "heading": f"{self.target_keyword} pagrindiniai privalumai",
+                    "content": f"Atraskite {self.target_keyword} privalumus ir kaip jie gali jums padėti. Mūsų {self.brand_name} ekspertai nustatė svarbiausius privalumus, įskaitant kokybę, patogumą ir vertę. Išsamiai aptarsime kiekvieną privalumą su tikrais pavyzdžiais ir palyginimais."
+                },
+                {
+                    "heading": f"Palyginimas: {self.target_keyword} vs alternatyvos",
+                    "content": f"Palyginkite {self.target_keyword} su kitais variantais, kad priimtumėte geriausią sprendimą. {self.brand_name} siūlo išsamius palyginimus, kurie padės jums apsispręsti. Apsvarstysime kainų skirtumus, kokybės variacijas ir prieinamumą skirtinguose variantuose."
+                },
+                {
+                    "heading": f"Kaip pasirinkti tinkamą {self.target_keyword}",
+                    "content": f"Išmokite kriterijus, kaip pasirinkti geriausią {self.target_keyword} jūsų poreikiams. {self.brand_name} teikia ekspertų vadovavimą, atsižvelgdama į biudžetą, kokybę ir asmeninius pageidavimus. Pateiksime žingsnis po žingsnio vadovą, kuris padės priimti teisingą sprendimą."
+                },
+                {
+                    "heading": f"Patarimai ir rekomendacijos",
+                    "content": f"Gaukite ekspertų patarimų ir rekomendacijų apie {self.target_keyword}. {self.brand_name} dalijasi vidinėmis žiniomis apie tai, ko ieškoti, kokių klaidų vengti ir kaip gauti geriausią vertę už savo pinigus."
+                },
+                {
+                    "heading": f"Išvados: {self.target_keyword} vadovas",
+                    "content": f"Priimkite pagrįstus sprendimus apie {self.target_keyword} su mūsų išsamiais vadovais. {self.brand_name} yra jūsų patikimas šaltinis ekspertų patarimams ir profesionaliam vadovavimui."
+                }
+            ]
+        else:  # English fallback
+            return [
+                {
+                    "heading": f"What is {self.target_keyword}?",
+                    "content": f"Understanding {self.target_keyword} is essential for making informed decisions. {self.brand_name} provides comprehensive insights into this topic. This guide covers everything you need to know about finding the best options, comparing prices, and making smart choices."
+                },
+                {
+                    "heading": f"Key Benefits of {self.target_keyword}",
+                    "content": f"Discover the advantages of {self.target_keyword} and how it can benefit you. Our experts at {self.brand_name} have identified the most important benefits including quality, convenience, and value. We'll explore each benefit in detail with real examples and comparisons."
+                },
+                {
+                    "heading": f"Comparison: {self.target_keyword} vs Alternatives",
+                    "content": f"Compare {self.target_keyword} with other options to make the best choice. {self.brand_name} offers detailed comparisons to help you decide. We'll look at price differences, quality variations, and availability across different options."
+                },
+                {
+                    "heading": f"How to Choose the Right {self.target_keyword}",
+                    "content": f"Learn the criteria for selecting the best {self.target_keyword} for your needs. {self.brand_name} provides expert guidance on factors like budget, quality, and personal preferences. We'll provide a step-by-step guide to help you make the right decision."
+                },
+                {
+                    "heading": f"Tips and Recommendations",
+                    "content": f"Get expert tips and recommendations for {self.target_keyword}. {self.brand_name} shares insider knowledge about what to look for, common mistakes to avoid, and how to get the best value for your money."
+                },
+                {
+                    "heading": f"Conclusion: {self.target_keyword} Guide",
+                    "content": f"Make informed decisions about {self.target_keyword} with our comprehensive guide. {self.brand_name} is your trusted source for expert insights and professional recommendations."
+                }
+            ]
     
     def _generate_geo_sections(self) -> List[Dict[str, str]]:
         """Generate GEO-optimized sections with local references"""
@@ -535,32 +563,60 @@ class BlogGenerator:
         """Ensure content meets minimum word count by expanding with examples and tips"""
         word_count = len(content.split())
         if word_count < min_words:
-            # Add expansion content
-            expansion = f"""
-            
-            ## Additional Insights and Tips
+            # Add expansion content in target language
+            if self.language.startswith('lt'):
+                expansion = f"""
+                
+                ## Papildomi įžvalgos ir patarimai
 
-            When considering your options, it's important to evaluate several key factors:
+                Apsvarstydami savo variantus, svarbu įvertinti kelis pagrindinius veiksnius:
 
-            **Quality Assessment**: Look for indicators of quality such as materials, craftsmanship, and brand reputation. {self.brand_name} maintains high standards across all our offerings.
+                **Kokybės vertinimas**: Ieškokite kokybės rodiklių, tokių kaip medžiagos, meistriškumas ir prekės ženklo reputacija. {self.brand_name} palaiko aukštus standartus visuose mūsų pasiūlymuose.
 
-            **Value Comparison**: Compare not just price, but value - what you get for your investment. Consider long-term benefits, durability, and overall satisfaction.
+                **Vertės palyginimas**: Palyginkite ne tik kainą, bet ir vertę - ką gaunate už savo investiciją. Apsvarstykite ilgalaikius privalumus, patvarumą ir bendrą pasitenkinimą.
 
-            **Expert Recommendations**: Our team at {self.brand_name} has extensive experience and can provide personalized recommendations based on your specific needs and preferences.
+                **Ekspertų rekomendacijos**: Mūsų {self.brand_name} komanda turi didelę patirtį ir gali suteikti individualizuotas rekomendacijas, atsižvelgdama į jūsų specifinius poreikius ir pageidavimus.
 
-            **Customer Reviews**: Read authentic reviews from other customers who have made similar choices. Their experiences can provide valuable insights.
+                **Klientų atsiliepimai**: Skaitykite autentiškus atsiliepimus iš kitų klientų, kurie priėmė panašius sprendimus. Jų patirtis gali suteikti vertingų įžvalgų.
 
-            **Trial and Testing**: Whenever possible, test or sample before making a final decision. {self.brand_name} offers various ways to experience our products before purchase.
+                **Išbandymas ir testavimas**: Kada tik įmanoma, išbandykite ar paragaukite prieš priimdami galutinį sprendimą. {self.brand_name} siūlo įvairius būdus išbandyti mūsų produktus prieš pirkimą.
 
-            **After-Sales Support**: Consider the support and service you'll receive after your purchase. {self.brand_name} provides comprehensive customer service and support.
+                **Po pardavimo palaikymas**: Apsvarstykite palaikymą ir paslaugas, kurias gausite po pirkimo. {self.brand_name} teikia išsamų klientų aptarnavimą ir palaikymą.
 
-            **Long-term Considerations**: Think about how your choice will serve you over time, not just immediately. Quality and durability often provide better long-term value.
+                **Ilgalaikiai svarstymai**: Pagalvokite, kaip jūsų pasirinkimas tarnaus jums laikui bėgant, ne tik iš karto. Kokybė ir patvarumas dažnai suteikia geresnę ilgalaikę vertę.
 
-            **Personal Preferences**: Your individual needs, style, and preferences should guide your decision. {self.brand_name} offers diverse options to suit different tastes and requirements.
+                **Asmeniniai pageidavimai**: Jūsų individualūs poreikiai, stilius ir pageidavimai turėtų vadovauti jūsų sprendimui. {self.brand_name} siūlo įvairius variantus, tinkančius skirtingiems skoniams ir reikalavimams.
 
-            **Budget Planning**: Set a realistic budget and stick to it, but also consider the value of investing in quality. Sometimes spending a bit more upfront saves money long-term.
+                **Biudžeto planavimas**: Nustatykite realų biudžetą ir laikykitės jo, bet taip pat apsvarstykite kokybės investavimo vertę. Kartais šiek tiek daugiau išleisti iš karto ilgainiui sutaupo pinigų.
 
-            **Research and Education**: Take time to learn about your options. {self.brand_name} provides educational resources and expert guidance to help you make informed decisions.
-            """
+                **Tyrimai ir švietimas**: Skirkite laiko išmokti apie savo variantus. {self.brand_name} teikia švietimo išteklius ir ekspertų vadovavimą, kuris padės priimti pagrįstus sprendimus.
+                """
+            else:  # English fallback
+                expansion = f"""
+                
+                ## Additional Insights and Tips
+
+                When considering your options, it's important to evaluate several key factors:
+
+                **Quality Assessment**: Look for indicators of quality such as materials, craftsmanship, and brand reputation. {self.brand_name} maintains high standards across all our offerings.
+
+                **Value Comparison**: Compare not just price, but value - what you get for your investment. Consider long-term benefits, durability, and overall satisfaction.
+
+                **Expert Recommendations**: Our team at {self.brand_name} has extensive experience and can provide personalized recommendations based on your specific needs and preferences.
+
+                **Customer Reviews**: Read authentic reviews from other customers who have made similar choices. Their experiences can provide valuable insights.
+
+                **Trial and Testing**: Whenever possible, test or sample before making a final decision. {self.brand_name} offers various ways to experience our products before purchase.
+
+                **After-Sales Support**: Consider the support and service you'll receive after your purchase. {self.brand_name} provides comprehensive customer service and support.
+
+                **Long-term Considerations**: Think about how your choice will serve you over time, not just immediately. Quality and durability often provide better long-term value.
+
+                **Personal Preferences**: Your individual needs, style, and preferences should guide your decision. {self.brand_name} offers diverse options to suit different tastes and requirements.
+
+                **Budget Planning**: Set a realistic budget and stick to it, but also consider the value of investing in quality. Sometimes spending a bit more upfront saves money long-term.
+
+                **Research and Education**: Take time to learn about your options. {self.brand_name} provides educational resources and expert guidance to help you make informed decisions.
+                """
             content += expansion
         return content

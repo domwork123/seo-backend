@@ -20,7 +20,8 @@ class BlogGenerator:
                           target_keyword: str, 
                           language: str = "en",
                           mode: str = "AEO",
-                          context: Dict[str, Any] = None) -> Dict[str, Any]:
+                          context: Dict[str, Any] = None,
+                          site_city: str = None) -> Dict[str, Any]:
         """
         Generate a blog post based on the provided parameters
         
@@ -39,6 +40,7 @@ class BlogGenerator:
         self.brand_name = brand_name
         self.target_keyword = target_keyword
         self.mode = mode.upper()
+        self.site_city = site_city
         
         # Generate content based on mode
         if self.mode == "AEO":
@@ -53,7 +55,10 @@ class BlogGenerator:
         
         # AEO-specific content structure
         title = f"{self.target_keyword}: Complete Guide | {self.brand_name}"
-        meta_description = f"{self.brand_name} - Complete {self.target_keyword} guide. Expert insights, comparisons & tips. Start now!"
+        if self.language.startswith('lt'):
+            meta_description = f"{self.brand_name} - Išsamus {self.target_keyword} vadovas. Ekspertų patarimai, palyginimai ir patarimai. Pradėkite dabar!"
+        else:
+            meta_description = f"{self.brand_name} - Complete {self.target_keyword} guide. Expert insights, comparisons & tips. Start now!"
         
         # Generate sections
         sections = self._generate_aeo_sections()
@@ -95,7 +100,10 @@ class BlogGenerator:
         
         # GEO-specific content structure
         title = f"{self.target_keyword} in {self._get_city_name()}: Local Guide | {self.brand_name}"
-        meta_description = f"{self.brand_name} - Best {self.target_keyword} in {self._get_city_name()}. Expert local guidance & insights. Visit us today!"
+        if self.language.startswith('lt'):
+            meta_description = f"{self.brand_name} - Geriausi {self.target_keyword} {self._get_city_name()}. Ekspertų vietinis vadovavimas ir patarimai. Apsilankykite šiandien!"
+        else:
+            meta_description = f"{self.brand_name} - Best {self.target_keyword} in {self._get_city_name()}. Expert local guidance & insights. Visit us today!"
         
         # Generate sections
         sections = self._generate_geo_sections()
@@ -284,10 +292,18 @@ class BlogGenerator:
         ]
     
     def _generate_aeo_content_text(self, sections: List[Dict], faqs: List[Dict]) -> str:
-        """Generate AEO-optimized content text (800-1200 words)"""
+        """Generate AEO-optimized content text (1000+ words)"""
+        
+        localized = self._get_localized_content()
         
         content = f"# {self.target_keyword}: Complete Guide\n\n"
-        content += f"Welcome to our comprehensive guide on {self.target_keyword}. {self.brand_name} provides expert insights to help you understand everything about this important topic.\n\n"
+        content += f"{localized['intro_prefix']} {self.target_keyword}. {self.brand_name} teikia ekspertų patarimus, kurie padės suprasti viską apie šią svarbią temą."
+        
+        # Add city mention for AEO (light GEO tie-in)
+        if self.site_city:
+            content += f" Šiame vadove aptarsime geriausias {self.target_keyword} galimybes {self.site_city} ir apylinkėse.\n\n"
+        else:
+            content += "\n\n"
         
         # Add sections
         for section in sections:
@@ -295,16 +311,16 @@ class BlogGenerator:
             content += f"{section['content']}\n\n"
         
         # Add FAQ section
-        content += "## Frequently Asked Questions\n\n"
+        content += f"## {localized['faq_heading']}\n\n"
         for faq in faqs:
             content += f"### {faq['question']}\n\n"
             content += f"{faq['answer']}\n\n"
         
-        content += f"## Conclusion\n\n"
-        content += f"Understanding {self.target_keyword} is crucial for making informed decisions. {self.brand_name} is your trusted partner for expert guidance and professional services.\n\n"
+        content += f"## {localized['conclusion']}\n\n"
+        content += f"Suprasti {self.target_keyword} yra labai svarbu priimant pagrįstus sprendimus. {self.brand_name} yra jūsų patikimas partneris, teikiantis ekspertų patarimus ir profesionalias paslaugas.\n\n"
         
-        # Ensure minimum word count (800 for AEO)
-        content = self._ensure_word_count(content, 800)
+        # Ensure minimum word count (1000 for AEO)
+        content = self._ensure_word_count(content, 1000)
         
         return content
     
@@ -329,8 +345,8 @@ class BlogGenerator:
         content += f"## Conclusion\n\n"
         content += f"Make the most of {self.target_keyword} in {city} with our local guide. {self.brand_name} is your trusted partner in {city}.\n\n"
         
-        # Ensure minimum word count (1000 for GEO)
-        content = self._ensure_word_count(content, 1000)
+        # Ensure minimum word count (1200 for GEO)
+        content = self._ensure_word_count(content, 1200)
         
         return content
     
@@ -423,6 +439,27 @@ class BlogGenerator:
     def _get_landmarks(self) -> str:
         """Get local landmarks for GEO content"""
         return "Akropolis, Panorama, Gedimino pr."
+    
+    def _get_localized_content(self) -> Dict[str, str]:
+        """Get localized content based on language"""
+        if self.language.startswith('lt'):
+            return {
+                'faq_heading': 'Dažniausiai užduodami klausimai',
+                'conclusion': 'Išvados',
+                'intro_prefix': 'Sveiki atvykę į mūsų išsamų vadovą apie',
+                'benefits_heading': 'Pagrindiniai privalumai',
+                'comparison_heading': 'Palyginimas',
+                'tips_heading': 'Patarimai ir rekomendacijos'
+            }
+        else:  # Default to English
+            return {
+                'faq_heading': 'Frequently Asked Questions',
+                'conclusion': 'Conclusion',
+                'intro_prefix': 'Welcome to our comprehensive guide on',
+                'benefits_heading': 'Key Benefits',
+                'comparison_heading': 'Comparison',
+                'tips_heading': 'Tips and Recommendations'
+            }
     
     def _ensure_word_count(self, content: str, min_words: int) -> str:
         """Ensure content meets minimum word count by expanding with examples and tips"""

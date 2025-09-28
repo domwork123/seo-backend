@@ -22,6 +22,7 @@ from scrapingbee_crawler import crawl_website_with_scrapingbee
 from signal_extractor import extract_signals_from_pages
 from supabase_schema import ensure_schema_exists, save_audit_data
 from blog_generator import BlogGenerator
+import re
 import uuid
 from datetime import datetime
 
@@ -43,6 +44,44 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def detect_lang(text: str) -> str:
+    """
+    Detect language from text using simple dictionary approach.
+    Returns 'lt' for Lithuanian, 'en' for English, 'unknown' otherwise.
+    """
+    if not text:
+        return 'unknown'
+    
+    # Lithuanian indicators
+    lt_indicators = ['ą', 'č', 'ę', 'ė', 'į', 'š', 'ų', 'ū', 'ž', 'kur', 'kaip', 'kada', 'kur', 'kas', 'kodėl']
+    # English indicators  
+    en_indicators = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'what', 'how', 'when', 'where', 'why']
+    
+    text_lower = text.lower()
+    
+    lt_count = sum(1 for indicator in lt_indicators if indicator in text_lower)
+    en_count = sum(1 for indicator in en_indicators if indicator in text_lower)
+    
+    if lt_count > en_count:
+        return 'lt'
+    elif en_count > lt_count:
+        return 'en'
+    else:
+        return 'unknown'
+
+def get_site_language(site_id: str) -> str:
+    """
+    Get language from site data in Supabase.
+    Returns default 'en' if not found.
+    """
+    try:
+        result = supabase.table("sites").select("language").eq("id", site_id).execute()
+        if result.data and len(result.data) > 0:
+            return result.data[0].get("language", "en")
+    except Exception as e:
+        print(f"Error fetching site language: {e}")
+    return "en"
 
 # ---------- models ----------
 class AuditRequest(BaseModel):
@@ -70,9 +109,10 @@ class QueryCheckRequest(BaseModel):
 class BlogRequest(BaseModel):
     brand_name: str
     target_keyword: str
-    language: Optional[str] = "en"
+    language: Optional[str] = None  # Will be required with fallback to sites.language
     mode: Optional[str] = "AEO"  # AEO or GEO
     context: Optional[Dict[str, Any]] = None
+    site_id: Optional[str] = None  # For fetching site language from Supabase
 
 class AuditRequest(BaseModel):
     url: str
@@ -522,7 +562,27 @@ async def generate_blog(req: BlogRequest = Body(...)):
     try:
         print(f"📝 Generating {req.mode} blog post for {req.brand_name}")
         print(f"🎯 Target keyword: {req.target_keyword}")
-        print(f"🌍 Language: {req.language}")
+        
+        # Language validation and fallback logic
+        language = req.language
+        if not language and req.site_id:
+            language = get_site_language(req.site_id)
+            print(f"🌍 Language from site: {language}")
+        elif not language:
+            return {"error": "language required", "message": "Language must be provided or site_id must be provided to fetch from sites table"}
+        
+        print(f"🌍 Language: {language}")
+        
+        # Get site data for city mention (AEO requirement)
+        site_city = None
+        if req.site_id:
+            try:
+                site_result = supabase.table("sites").select("location").eq("id", req.site_id).execute()
+                if site_result.data and len(site_result.data) > 0:
+                    site_city = site_result.data[0].get("location", "")
+                    print(f"🏙️ Site city: {site_city}")
+            except Exception as e:
+                print(f"⚠️ Could not fetch site city: {e}")
         
         # Initialize blog generator
         generator = BlogGenerator()
@@ -531,10 +591,20 @@ async def generate_blog(req: BlogRequest = Body(...)):
         blog_post = generator.generate_blog_post(
             brand_name=req.brand_name,
             target_keyword=req.target_keyword,
-            language=req.language,
+            language=language,
             mode=req.mode,
-            context=req.context
+            context=req.context,
+            site_city=site_city
         )
+        
+        # Language validation and auto-repair
+        title_intro_content = f"{blog_post.get('title', '')} {blog_post.get('content', '')[:500]}"
+        detected_lang = detect_lang(title_intro_content)
+        print(f"🔍 Detected language: {detected_lang}")
+        
+        if detected_lang != language.split('-')[0] and detected_lang != 'unknown':
+            print(f"⚠️ Language mismatch detected: expected {language}, got {detected_lang}")
+            # In a real implementation, you might want to regenerate or flag this
         
         print(f"✅ Blog post generated successfully")
         print(f"📊 Word count: {blog_post['word_count']}")

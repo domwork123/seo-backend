@@ -1,21 +1,50 @@
-"""
-Simple Blog Generator - Let the LLM handle everything naturally
-Updated for Railway deployment
-"""
+"""Utility for generating AEO/GEO-optimized blog posts with an LLM backend."""
+
+from __future__ import annotations
+
 import json
-from typing import Dict, Any
+import os
 from datetime import datetime
+from textwrap import dedent
+from typing import Any, Dict, Optional
+
+from langdetect import DetectorFactory, detect
+
+DetectorFactory.seed = 0
+
+try:  # pragma: no cover - import guard mirrors existing modules
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - environments without OpenAI SDK
+    OpenAI = None  # type: ignore
+
 
 class SimpleBlogGenerator:
-    def __init__(self):
-        pass
-    
-    def generate_blog_post(self, 
-                          brand_name: str, 
-                          target_keyword: str, 
+    """Generate long-form blog posts by delegating to an LLM.
+
+    The generator builds a prescriptive prompt, calls the configured LLM, and
+    validates the response against the expected schema.  When an LLM response is
+    unavailable or malformed, a deterministic mock payload is returned to keep
+    downstream flows resilient.
+    """
+
+    _DEFAULT_MODEL = os.getenv("BLOG_POST_LLM_MODEL", "gpt-4o-mini")
+
+    def __init__(self, client: Optional[Any] = None) -> None:
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+
+        if client is not None:
+            self._client = client
+        elif OpenAI and api_key:
+            self._client = OpenAI(api_key=api_key)
+        else:
+            self._client = None
+
+    def generate_blog_post(self,
+                          brand_name: str,
+                          target_keyword: str,
                           language: str = "en",
                           mode: str = "AEO",
-                          context: Dict[str, Any] = None,
+                          context: Optional[Dict[str, Any]] = None,
                           site_city: str = None) -> Dict[str, Any]:
         """
         Generate a blog post by passing everything to the LLM naturally
@@ -32,17 +61,57 @@ class SimpleBlogGenerator:
             Dict containing the generated blog post
         """
         
-        # Create the prompt for the LLM
-        prompt = self._create_llm_prompt(brand_name, target_keyword, language, mode, context, site_city)
-        
-        # For now, return a mock response - in real implementation, this would call the LLM
-        # The LLM would handle all the language detection, city detection, and content generation
-        return self._mock_llm_response(brand_name, target_keyword, language, mode)
-    
-    def _create_llm_prompt(self, brand_name: str, target_keyword: str, language: str, mode: str, context: Dict, site_city: str) -> str:
+        resolved_language = self._resolve_language(language, target_keyword, context)
+        prompt = self._create_llm_prompt(
+            brand_name=brand_name,
+            target_keyword=target_keyword,
+            language=resolved_language,
+            mode=mode,
+            context=context,
+            site_city=site_city,
+        )
+
+        if not self._client:
+            return self._mock_llm_response(brand_name, target_keyword, resolved_language, mode)
+
+        try:
+            response = self._client.chat.completions.create(
+                model=self._DEFAULT_MODEL,
+                temperature=0.2,
+                max_tokens=4_000,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are EVIKA's specialised blog generation agent."
+                            " Follow every rule precisely and always return JSON."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+            )
+
+            raw_output = response.choices[0].message.content or ""
+            parsed_output = self._parse_llm_response(raw_output)
+            validated_output = self._coerce_response_structure(
+                parsed_output,
+                brand_name=brand_name,
+                target_keyword=target_keyword,
+                language=resolved_language,
+                mode=mode,
+            )
+            return validated_output
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            print(f"⚠️ LLM blog generation failed, using mock response: {exc}")
+            return self._mock_llm_response(brand_name, target_keyword, resolved_language, mode)
+
+    def _create_llm_prompt(self, brand_name: str, target_keyword: str, language: str, mode: str,
+                           context: Optional[Dict[str, Any]], site_city: Optional[str]) -> str:
         """Create a comprehensive prompt for the LLM"""
-        
-        ruleset = """
+
+        safe_context = self._serialise_context(context)
+        ruleset = dedent(
+            f"""
         You are EVIKA's Blog Generator. You must produce a strict JSON object that matches the provided JSON schema.
 
         RULES:
@@ -89,29 +158,32 @@ class SimpleBlogGenerator:
         - language
         - generated_at
         """
-        
-        return f"""
-        {ruleset}
-        
+        )
+
+        task = dedent(
+            f"""
         TASK:
         Generate a {mode} blog post for:
         - Brand: {brand_name}
         - Target Keyword: {target_keyword}
         - Language: {language}
         - Mode: {mode}
-        - Context: {json.dumps(context) if context else 'None'}
+        - Context: {safe_context}
         - Site City: {site_city or 'None'}
-        
-        IMPORTANT: 
+
+        IMPORTANT:
         - Detect the city from the target keyword naturally
         - Use the correct language throughout
         - Let the LLM figure out everything automatically
         - Don't hardcode anything - let the LLM be smart
         """
-    
+        )
+
+        return f"{ruleset}\n\n{task}".strip()
+
     def _mock_llm_response(self, brand_name: str, target_keyword: str, language: str, mode: str) -> Dict[str, Any]:
         """Mock response - in real implementation, this would call the actual LLM"""
-        
+
         # This is just a placeholder - the real implementation would call GPT-4 Mini
         # with the prompt and let it generate everything naturally
         
@@ -131,3 +203,118 @@ class SimpleBlogGenerator:
             "language": language,
             "generated_at": datetime.now().isoformat()
         }
+
+    def _parse_llm_response(self, raw_output: str) -> Dict[str, Any]:
+        """Extract JSON from the raw LLM output."""
+
+        if not raw_output:
+            raise ValueError("Empty response from LLM")
+
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            # Remove potential language hint like ```json
+            cleaned = cleaned.split("\n", 1)[-1]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Attempt to locate first JSON object boundaries
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                snippet = cleaned[start:end + 1]
+                return json.loads(snippet)
+            raise
+
+    def _coerce_response_structure(
+        self,
+        response: Dict[str, Any],
+        *,
+        brand_name: str,
+        target_keyword: str,
+        language: str,
+        mode: str,
+    ) -> Dict[str, Any]:
+        """Ensure the response matches the schema the API expects."""
+
+        required_list_fields = {
+            "sections": list,
+            "faqs": list,
+            "images": list,
+            "internal_links": list,
+        }
+
+        if not isinstance(response, dict):
+            raise ValueError("LLM response is not a JSON object")
+
+        response.setdefault("title", f"{target_keyword} | {brand_name}")
+        response.setdefault("meta_description", "")
+        response.setdefault("content", "")
+        response.setdefault("word_count", 0)
+        response.setdefault("json_ld", {})
+
+        for field, expected_type in required_list_fields.items():
+            value = response.get(field)
+            if not isinstance(value, expected_type):
+                response[field] = []
+
+        try:
+            response["word_count"] = int(response.get("word_count", 0))
+        except Exception:
+            response["word_count"] = 0
+
+        response["mode"] = mode
+        response["target_keyword"] = target_keyword
+        response["brand"] = brand_name
+        response["language"] = language
+        response.setdefault("generated_at", datetime.now().isoformat())
+
+        return response
+
+    def _resolve_language(self, language: Optional[str], target_keyword: str,
+                           context: Optional[Dict[str, Any]]) -> str:
+        """Pick the best language code based on inputs and detection heuristics."""
+
+        candidates = [language, self._detect_language(target_keyword)]
+
+        if context:
+            context_lang = context.get("language") or context.get("lang")
+            if isinstance(context_lang, str):
+                candidates.append(context_lang)
+
+            # Sample textual signals for detection
+            for key in ("title", "description", "summary"):
+                text = context.get(key)
+                if isinstance(text, str):
+                    candidates.append(self._detect_language(text))
+
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate:
+                return candidate
+
+        return "en"
+
+    @staticmethod
+    def _detect_language(text: Optional[str]) -> str:
+        if not text or not text.strip():
+            return ""
+        try:
+            return detect(text)
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _serialise_context(context: Optional[Dict[str, Any]]) -> str:
+        if not context:
+            return "None"
+
+        try:
+            payload = json.dumps(context, ensure_ascii=False)
+            if len(payload) > 1_500:
+                payload = payload[:1_500] + "…"
+            return payload
+        except Exception:
+            return "Context serialization failed"

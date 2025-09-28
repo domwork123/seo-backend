@@ -161,10 +161,10 @@ class SimpleBlogGenerator:
         - meta_description
         - content (full markdown)
         - word_count
-        - sections (array of {title, content})
-        - faqs (array of {question, answer})
-        - images (array of {alt, src, caption})
-        - internal_links (array of {text, url, anchor})
+        - sections (array of {{title, content}})
+        - faqs (array of {{question, answer}})
+        - images (array of {{alt, src, caption}})
+        - internal_links (array of {{text, url, anchor}})
         - json_ld (object with article and optionally local_business)
         - mode
         - target_keyword

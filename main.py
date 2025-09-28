@@ -21,7 +21,7 @@ from query_analyzer import analyze_query_visibility
 from scrapingbee_crawler import crawl_website_with_scrapingbee
 from signal_extractor import extract_signals_from_pages
 from supabase_schema import ensure_schema_exists, save_audit_data
-from blog_generator import BlogGenerator
+from simple_blog_generator import SimpleBlogGenerator
 import re
 import uuid
 from datetime import datetime
@@ -584,8 +584,8 @@ async def generate_blog(req: BlogRequest = Body(...)):
             except Exception as e:
                 print(f"⚠️ Could not fetch site city: {e}")
         
-        # Initialize blog generator
-        generator = BlogGenerator()
+                    # Initialize blog generator
+                    generator = SimpleBlogGenerator()
         
         # Generate blog post
         blog_post = generator.generate_blog_post(

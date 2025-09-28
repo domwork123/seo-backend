@@ -14,6 +14,8 @@ class BlogGenerator:
         self.brand_name = ""
         self.target_keyword = ""
         self.mode = "AEO"  # AEO or GEO
+        self.context = None
+        self.site_city = None
         
     def generate_blog_post(self, 
                           brand_name: str, 

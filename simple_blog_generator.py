@@ -70,6 +70,9 @@ class SimpleBlogGenerator:
         
         # Merge context with Supabase data
         enhanced_context = {**(context or {}), **supabase_context}
+        print(f"🔍 Enhanced context keys: {list(enhanced_context.keys())}")
+        print(f"🔍 Context type: {type(context)}")
+        print(f"🔍 Supabase context type: {type(supabase_context)}")
         
         prompt = self._create_llm_prompt(
             brand_name=brand_name,

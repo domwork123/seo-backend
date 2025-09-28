@@ -101,7 +101,9 @@ class SimpleBlogGenerator:
             )
 
             raw_output = response.choices[0].message.content or ""
+            print(f"🔍 Raw LLM output: {raw_output[:200]}...")
             parsed_output = self._parse_llm_response(raw_output)
+            print(f"🔍 Parsed output keys: {list(parsed_output.keys())}")
             validated_output = self._coerce_response_structure(
                 parsed_output,
                 brand_name=brand_name,

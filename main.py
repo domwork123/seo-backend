@@ -584,8 +584,8 @@ async def generate_blog(req: BlogRequest = Body(...)):
             except Exception as e:
                 print(f"⚠️ Could not fetch site city: {e}")
         
-                    # Initialize blog generator
-                    generator = SimpleBlogGenerator()
+        # Initialize blog generator
+        generator = SimpleBlogGenerator()
         
         # Generate blog post
         blog_post = generator.generate_blog_post(

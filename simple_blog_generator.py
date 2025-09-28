@@ -389,6 +389,7 @@ class SimpleBlogGenerator:
     
     def _extract_headings_from_pages(self, pages_data: list) -> list:
         """Extract headings from pages data"""
+        print(f"🔍 Extracting headings from {len(pages_data)} pages")
         headings = []
         for page in pages_data:
             if page.get("raw_text"):
@@ -398,6 +399,7 @@ class SimpleBlogGenerator:
                     line = line.strip()
                     if line.startswith('#') or (len(line) > 10 and line.isupper()):
                         headings.append(line)
+        print(f"🔍 Extracted {len(headings)} headings")
         return headings[:10]  # Limit to 10 headings
     
     def _extract_products_from_pages(self, pages_data: list) -> list:

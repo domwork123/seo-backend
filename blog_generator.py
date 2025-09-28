@@ -199,35 +199,63 @@ class BlogGenerator:
             ]
     
     def _generate_geo_sections(self) -> List[Dict[str, str]]:
-        """Generate GEO-optimized sections with local references"""
+        """Generate GEO-optimized sections with local references in target language"""
         city = self._get_city_name()
         landmarks = self._get_landmarks()
-        return [
-            {
-                "heading": f"{self.target_keyword} in {city}: Local Overview",
-                "content": f"Discover the best {self.target_keyword} options in {city}. {self.brand_name} provides local insights and recommendations for {city} residents. From {landmarks}, we'll guide you through the top locations and what makes each area unique for shopping."
-            },
-            {
-                "heading": f"Top {self.target_keyword} Locations in {city}",
-                "content": f"Find the most popular {self.target_keyword} spots in {city}, including areas near {landmarks}. {self.brand_name} knows {city} best and can recommend the best places based on your preferences. We'll cover shopping centers, local boutiques, and hidden gems."
-            },
-            {
-                "heading": f"Online vs Local {self.target_keyword} in {city}",
-                "content": f"Compare online and local {self.target_keyword} experiences in {city}. {self.brand_name} helps you choose the best option for your needs. We'll discuss the advantages of shopping locally in {city} versus online options, including immediate availability, personal service, and local expertise."
-            },
-            {
-                "heading": f"Local {self.target_keyword} Benefits in {city}",
-                "content": f"Learn why local {self.target_keyword} in {city} offers unique advantages. {self.brand_name} connects you with the best local options and explains the benefits of supporting local businesses in {city}. We'll cover convenience, local knowledge, and community support."
-            },
-            {
-                "heading": f"Best Times to Shop in {city}",
-                "content": f"Discover the optimal times to visit {self.target_keyword} locations in {city}. {self.brand_name} shares insider tips about when stores are less crowded, when sales typically occur, and how to plan your shopping trip for the best experience."
-            },
-            {
-                "heading": f"Conclusion: {self.target_keyword} in {city}",
-                "content": f"Make the most of {self.target_keyword} in {city} with our local guide. {self.brand_name} is your trusted partner in {city} and we're committed to helping you find exactly what you're looking for."
-            }
-        ]
+        if self.language.startswith('lt'):
+            return [
+                {
+                    "heading": f"{self.target_keyword} {city}: Vietinis apžvalga",
+                    "content": f"Atraskite geriausias {self.target_keyword} galimybes {city}. {self.brand_name} teikia vietinius patarimus ir rekomendacijas {city} gyventojams. Nuo {landmarks}, mes jums padėsime per geriausias vietas ir kas daro kiekvieną sritį unikalią apsipirkimui."
+                },
+                {
+                    "heading": f"Geriausios {self.target_keyword} vietos {city}",
+                    "content": f"Raskite populiariausias {self.target_keyword} vietas {city}, įskaitant sritis šalia {landmarks}. {self.brand_name} geriau žino {city} ir gali rekomenduoti geriausias vietas pagal jūsų pageidavimus. Apžvelgsime prekybos centrus, vietines parduotuves ir paslėptas perlas."
+                },
+                {
+                    "heading": f"Interneto vs vietinis {self.target_keyword} {city}",
+                    "content": f"Palyginkite internetinius ir vietinius {self.target_keyword} patirtis {city}. {self.brand_name} padeda pasirinkti geriausią variantą jūsų poreikiams. Aptarsime vietinio apsipirkimo {city} privalumus lyginant su internetiniais variantais, įskaitant nedelsiant prieinamumą, asmeninį aptarnavimą ir vietinę ekspertizę."
+                },
+                {
+                    "heading": f"Vietinio {self.target_keyword} privalumai {city}",
+                    "content": f"Išmokite, kodėl vietinis {self.target_keyword} {city} siūlo unikalius privalumus. {self.brand_name} jungia jus su geriausiais vietiniais variantais ir paaiškina vietinių verslų {city} palaikymo privalumus. Apžvelgsime patogumą, vietines žinias ir bendruomenės palaikymą."
+                },
+                {
+                    "heading": f"Geriausi apsipirkimo laikai {city}",
+                    "content": f"Atraskite optimalius laikus apsilankyti {self.target_keyword} vietose {city}. {self.brand_name} dalijasi vidiniais patarimais apie tai, kada parduotuvės mažiau apkrautos, kada paprastai vyksta nuolaidos ir kaip suplanuoti apsipirkimo kelionę geriausiai."
+                },
+                {
+                    "heading": f"Išvados: {self.target_keyword} {city}",
+                    "content": f"Išnaudokite {self.target_keyword} {city} su mūsų vietiniu vadovu. {self.brand_name} yra jūsų patikimas partneris {city} ir esame įsipareigoję padėti rasti tiksliai tai, ko ieškote."
+                }
+            ]
+        else:  # English fallback
+            return [
+                {
+                    "heading": f"{self.target_keyword} in {city}: Local Overview",
+                    "content": f"Discover the best {self.target_keyword} options in {city}. {self.brand_name} provides local insights and recommendations for {city} residents. From {landmarks}, we'll guide you through the top locations and what makes each area unique for shopping."
+                },
+                {
+                    "heading": f"Top {self.target_keyword} Locations in {city}",
+                    "content": f"Find the most popular {self.target_keyword} spots in {city}, including areas near {landmarks}. {self.brand_name} knows {city} best and can recommend the best places based on your preferences. We'll cover shopping centers, local boutiques, and hidden gems."
+                },
+                {
+                    "heading": f"Online vs Local {self.target_keyword} in {city}",
+                    "content": f"Compare online and local {self.target_keyword} experiences in {city}. {self.brand_name} helps you choose the best option for your needs. We'll discuss the advantages of shopping locally in {city} versus online options, including immediate availability, personal service, and local expertise."
+                },
+                {
+                    "heading": f"Local {self.target_keyword} Benefits in {city}",
+                    "content": f"Learn why local {self.target_keyword} in {city} offers unique advantages. {self.brand_name} connects you with the best local options and explains the benefits of supporting local businesses in {city}. We'll cover convenience, local knowledge, and community support."
+                },
+                {
+                    "heading": f"Best Times to Shop in {city}",
+                    "content": f"Discover the optimal times to visit {self.target_keyword} locations in {city}. {self.brand_name} shares insider tips about when stores are less crowded, when sales typically occur, and how to plan your shopping trip for the best experience."
+                },
+                {
+                    "heading": f"Conclusion: {self.target_keyword} in {city}",
+                    "content": f"Make the most of {self.target_keyword} in {city} with our local guide. {self.brand_name} is your trusted partner in {city} and we're committed to helping you find exactly what you're looking for."
+                }
+            ]
     
     def _generate_aeo_faqs(self) -> List[Dict[str, str]]:
         """Generate AEO-optimized FAQs based on real user intent with Lithuanian People Also Ask style"""
@@ -287,35 +315,63 @@ class BlogGenerator:
             ]
     
     def _generate_geo_faqs(self) -> List[Dict[str, str]]:
-        """Generate GEO-optimized FAQs with local references"""
+        """Generate GEO-optimized FAQs with local focus in target language"""
         city = self._get_city_name()
         landmarks = self._get_landmarks()
-        return [
-            {
-                "question": f"Where can I find the best options in {city}?",
-                "answer": f"{self.brand_name} has multiple locations throughout {city}, including areas near {landmarks}. We can recommend the best spots based on your preferences and provide detailed directions to our stores."
-            },
-            {
-                "question": f"What are the advantages of shopping locally vs online?",
-                "answer": f"Shopping locally in {city} with {self.brand_name} offers immediate availability, personal service, and local expertise. You can see, touch, and test products before buying, plus get instant expert advice from our {city} team."
-            },
-            {
-                "question": f"Are there any special offers for {city} residents?",
-                "answer": f"Yes, {self.brand_name} offers exclusive deals for {city} residents, including local discounts and special promotions. We also have loyalty programs and seasonal offers that are perfect for {city} shoppers."
-            },
-            {
-                "question": f"Can I get same-day service in {city}?",
-                "answer": f"Absolutely! {self.brand_name} provides same-day service throughout {city}. Our local team ensures fast turnaround times and can often accommodate urgent requests from {city} customers."
-            },
-            {
-                "question": f"What makes {self.brand_name} different from other options in {city}?",
-                "answer": f"{self.brand_name} stands out in {city} with our local expertise, personalized service, and deep understanding of {city}'s unique needs. We're not just another chain - we're part of the {city} community."
-            },
-            {
-                "question": f"Do you offer delivery throughout {city}?",
-                "answer": f"Yes, {self.brand_name} offers comprehensive delivery services throughout {city}, including to areas near {landmarks}. We ensure fast, reliable delivery with tracking and customer support from our {city} team."
-            }
-        ]
+        if self.language.startswith('lt'):
+            return [
+                {
+                    "question": f"Kur galiu rasti geriausius variantus {city}?",
+                    "answer": f"{self.brand_name} turi kelias vietas visoje {city}, įskaitant sritis šalia {landmarks}. Galime rekomenduoti geriausias vietas pagal jūsų pageidavimus ir suteikti išsamias instrukcijas į mūsų parduotuves."
+                },
+                {
+                    "question": f"Kokie privalumai apsipirkti vietiniame vs internete?",
+                    "answer": f"Apsipirkimas vietiniame {city} su {self.brand_name} siūlo nedelsiant prieinamumą, asmeninį aptarnavimą ir vietinę ekspertizę. Galite pamatyti, paliesti ir išbandyti produktus prieš pirkdami, plius gauti momentinius ekspertų patarimus iš mūsų {city} komandos."
+                },
+                {
+                    "question": f"Ar yra specialių pasiūlymų {city} gyventojams?",
+                    "answer": f"Taip, {self.brand_name} siūlo ekskluzyvius pasiūlymus {city} gyventojams, įskaitant vietines nuolaidas ir specialius pasiūlymus. Taip pat turime lojalumo programas ir sezoninius pasiūlymus, kurie puikiai tinka {city} pirkėjams."
+                },
+                {
+                    "question": f"Ar galiu gauti tą pačią dieną paslaugą {city}?",
+                    "answer": f"Žinoma! {self.brand_name} teikia tą pačią dieną paslaugas visoje {city}. Mūsų vietinė komanda užtikrina greitą apdorojimą ir dažnai gali prisitaikyti prie skubų {city} klientų prašymų."
+                },
+                {
+                    "question": f"Kuo {self.brand_name} skiriasi nuo kitų variantų {city}?",
+                    "answer": f"{self.brand_name} išsiskiria {city} su savo vietine ekspertize, individualizuotu aptarnavimu ir giliu {city} unikalių poreikių supratimu. Mes ne tik dar viena grandinė - mes esame {city} bendruomenės dalis."
+                },
+                {
+                    "question": f"Ar teikiate pristatymą visoje {city}?",
+                    "answer": f"Taip, {self.brand_name} teikia išsamias pristatymo paslaugas visoje {city}, įskaitant sritis šalia {landmarks}. Užtikriname greitą, patikimą pristatymą su sekimu ir klientų palaikymu iš mūsų {city} komandos."
+                }
+            ]
+        else:  # English fallback
+            return [
+                {
+                    "question": f"Where can I find the best options in {city}?",
+                    "answer": f"{self.brand_name} has multiple locations throughout {city}, including areas near {landmarks}. We can recommend the best spots based on your preferences and provide detailed directions to our stores."
+                },
+                {
+                    "question": f"What are the advantages of shopping locally vs online?",
+                    "answer": f"Shopping locally in {city} with {self.brand_name} offers immediate availability, personal service, and local expertise. You can see, touch, and test products before buying, plus get instant expert advice from our {city} team."
+                },
+                {
+                    "question": f"Are there any special offers for {city} residents?",
+                    "answer": f"Yes, {self.brand_name} offers exclusive deals for {city} residents, including local discounts and special promotions. We also have loyalty programs and seasonal offers that are perfect for {city} shoppers."
+                },
+                {
+                    "question": f"Can I get same-day service in {city}?",
+                    "answer": f"Absolutely! {self.brand_name} provides same-day service throughout {city}. Our local team ensures fast turnaround times and can often accommodate urgent requests from {city} customers."
+                },
+                {
+                    "question": f"What makes {self.brand_name} different from other options in {city}?",
+                    "answer": f"{self.brand_name} stands out in {city} with our local expertise, personalized service, and deep understanding of {city}'s unique needs. We're not just another chain - we're part of the {city} community."
+                },
+                {
+                    "question": f"Do you offer delivery throughout {city}?",
+                    "answer": f"Yes, {self.brand_name} offers comprehensive delivery services throughout {city}, including to areas near {landmarks}. We ensure fast, reliable delivery with tracking and customer support from our {city} team."
+                }
+            ]
     
     def _generate_images(self) -> List[Dict[str, str]]:
         """Generate image suggestions (≥2) with localized alt text"""
@@ -417,11 +473,17 @@ class BlogGenerator:
         return content
     
     def _generate_geo_content_text(self, sections: List[Dict], faqs: List[Dict]) -> str:
-        """Generate GEO-optimized content text (1000-1400 words)"""
+        """Generate GEO-optimized content text (1200-1500 words) in target language"""
         
+        localized = self._get_localized_content()
         city = self._get_city_name()
-        content = f"# {self.target_keyword} in {city}: Local Guide\n\n"
-        content += f"Discover the best {self.target_keyword} options in {city}. {self.brand_name} provides local expertise and insights for {city} residents.\n\n"
+        
+        if self.language.startswith('lt'):
+            content = f"# {self.target_keyword} {city}: Vietinis vadovas\n\n"
+            content += f"Atraskite geriausias {self.target_keyword} galimybes {city}. {self.brand_name} teikia vietinę ekspertizę ir įžvalgas {city} gyventojams.\n\n"
+        else:
+            content = f"# {self.target_keyword} in {city}: Local Guide\n\n"
+            content += f"Discover the best {self.target_keyword} options in {city}. {self.brand_name} provides local expertise and insights for {city} residents.\n\n"
         
         # Add sections
         for section in sections:
@@ -429,13 +491,17 @@ class BlogGenerator:
             content += f"{section['content']}\n\n"
         
         # Add FAQ section
-        content += "## Frequently Asked Questions\n\n"
+        content += f"## {localized['faq_heading']}\n\n"
         for faq in faqs:
             content += f"### {faq['question']}\n\n"
             content += f"{faq['answer']}\n\n"
         
-        content += f"## Conclusion\n\n"
-        content += f"Make the most of {self.target_keyword} in {city} with our local guide. {self.brand_name} is your trusted partner in {city}.\n\n"
+        # Add conclusion
+        content += f"## {localized['conclusion']}\n\n"
+        if self.language.startswith('lt'):
+            content += f"Išnaudokite {self.target_keyword} {city} su mūsų vietiniu vadovu. {self.brand_name} yra jūsų patikimas partneris {city}.\n\n"
+        else:
+            content += f"Make the most of {self.target_keyword} in {city} with our local guide. {self.brand_name} is your trusted partner in {city}.\n\n"
         
         # Ensure minimum word count (1200-1500 for GEO)
         content = self._ensure_word_count(content, 1200)

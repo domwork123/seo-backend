@@ -1,5 +1,6 @@
 """
 Simple Blog Generator - Let the LLM handle everything naturally
+Updated for Railway deployment
 """
 import json
 from typing import Dict, Any

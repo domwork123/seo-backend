@@ -45,7 +45,9 @@ class SimpleBlogGenerator:
                           language: str = "en",
                           mode: str = "AEO",
                           context: Optional[Dict[str, Any]] = None,
-                          site_city: str = None) -> Dict[str, Any]:
+                          site_city: str = None,
+                          site_id: Optional[str] = None,
+                          supabase_client = None) -> Dict[str, Any]:
         """
         Generate a blog post by passing everything to the LLM naturally
         
@@ -62,12 +64,19 @@ class SimpleBlogGenerator:
         """
         
         resolved_language = self._resolve_language(language, target_keyword, context)
+        
+        # Fetch comprehensive data from Supabase
+        supabase_context = self._fetch_supabase_data(site_id, supabase_client) if site_id and supabase_client else {}
+        
+        # Merge context with Supabase data
+        enhanced_context = {**(context or {}), **supabase_context}
+        
         prompt = self._create_llm_prompt(
             brand_name=brand_name,
             target_keyword=target_keyword,
             language=resolved_language,
             mode=mode,
-            context=context,
+            context=enhanced_context,
             site_city=site_city,
         )
 
@@ -305,6 +314,101 @@ class SimpleBlogGenerator:
             return detect(text)
         except Exception:
             return ""
+
+    def _fetch_supabase_data(self, site_id: str, supabase_client) -> Dict[str, Any]:
+        """Fetch comprehensive data from Supabase for better blog generation"""
+        
+        if not site_id or not supabase_client:
+            return {}
+        
+        try:
+            # Fetch site information
+            site_data = {}
+            try:
+                site_result = supabase_client.table("sites").select("*").eq("id", site_id).execute()
+                if site_result.data and len(site_result.data) > 0:
+                    site_data = site_result.data[0]
+            except Exception as e:
+                print(f"⚠️ Could not fetch site data: {e}")
+            
+            # Fetch pages data
+            pages_data = []
+            try:
+                pages_result = supabase_client.table("pages").select("*").eq("site_id", site_id).limit(10).execute()
+                if pages_result.data:
+                    pages_data = pages_result.data
+            except Exception as e:
+                print(f"⚠️ Could not fetch pages data: {e}")
+            
+            # Fetch audit data
+            audit_data = {}
+            try:
+                audit_result = supabase_client.table("audits").select("*").eq("site_id", site_id).order("created_at", desc=True).limit(1).execute()
+                if audit_result.data and len(audit_result.data) > 0:
+                    audit_data = audit_result.data[0]
+            except Exception as e:
+                print(f"⚠️ Could not fetch audit data: {e}")
+            
+            # Compile comprehensive context
+            context = {
+                "site_info": {
+                    "brand_name": site_data.get("brand_name", ""),
+                    "description": site_data.get("description", ""),
+                    "location": site_data.get("location", ""),
+                    "industry": site_data.get("industry", ""),
+                    "language": site_data.get("language", ""),
+                    "url": site_data.get("url", "")
+                },
+                "pages": pages_data,
+                "audit_data": {
+                    "faqs": audit_data.get("faqs", []),
+                    "schema": audit_data.get("schema", {}),
+                    "competitors": audit_data.get("competitors", []),
+                    "geo_signals": audit_data.get("geo_signals", {}),
+                    "alt_text_issues": audit_data.get("alt_text", [])
+                },
+                "extracted_content": {
+                    "titles": [page.get("title", "") for page in pages_data if page.get("title")],
+                    "descriptions": [page.get("meta_description", "") for page in pages_data if page.get("meta_description")],
+                    "headings": self._extract_headings_from_pages(pages_data),
+                    "products_services": self._extract_products_from_pages(pages_data)
+                }
+            }
+            
+            print(f"📊 Fetched comprehensive Supabase data for site {site_id}")
+            return context
+            
+        except Exception as e:
+            print(f"❌ Error fetching Supabase data: {e}")
+            return {}
+    
+    def _extract_headings_from_pages(self, pages_data: list) -> list:
+        """Extract headings from pages data"""
+        headings = []
+        for page in pages_data:
+            if page.get("raw_text"):
+                # Simple extraction of potential headings (lines starting with # or all caps)
+                text_lines = page["raw_text"].split('\n')
+                for line in text_lines[:20]:  # Check first 20 lines
+                    line = line.strip()
+                    if line.startswith('#') or (len(line) > 10 and line.isupper()):
+                        headings.append(line)
+        return headings[:10]  # Limit to 10 headings
+    
+    def _extract_products_from_pages(self, pages_data: list) -> list:
+        """Extract potential products/services from pages data"""
+        products = []
+        for page in pages_data:
+            if page.get("raw_text"):
+                # Look for common product/service indicators
+                text = page["raw_text"].lower()
+                if any(keyword in text for keyword in ["produktas", "paslauga", "prekė", "tarnyba", "produktai", "paslaugos"]):
+                    # Extract potential product names (simplified)
+                    lines = page["raw_text"].split('\n')
+                    for line in lines[:10]:
+                        if any(keyword in line.lower() for keyword in ["produktas", "paslauga", "prekė"]):
+                            products.append(line.strip())
+        return products[:5]  # Limit to 5 products
 
     @staticmethod
     def _serialise_context(context: Optional[Dict[str, Any]]) -> str:

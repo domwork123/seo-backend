@@ -594,7 +594,9 @@ async def generate_blog(req: BlogRequest = Body(...)):
             language=language,
             mode=req.mode,
             context=req.context,
-            site_city=site_city
+            site_city=site_city,
+            site_id=req.site_id,
+            supabase_client=supabase
         )
         
         # Language validation and auto-repair

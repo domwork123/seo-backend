@@ -401,15 +401,96 @@ def generate_geo_recommendations(site_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 async def generate_ai_queries(site_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Generate 20 AI queries split evenly across 5 categories"""
+    """Generate 20 AI queries using GPT-4 Mini for dynamic, natural queries"""
+    
+    site_info = site_data["site_info"]
+    audit_data = site_data["audit_data"]
+    
+    print(f"🎯 Generating dynamic AI queries for: {site_info['brand_name']}")
+    
+    try:
+        # Get OpenAI client
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("❌ OpenAI API key not found, using fallback queries")
+            return await _generate_fallback_queries(site_data)
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        # Create context for query generation
+        brand_name = site_info['brand_name']
+        services = ', '.join(audit_data.get('products', ['services']))
+        location = site_info.get('location', '')
+        industry = site_info.get('industry', 'business')
+        
+        # Determine if location exists for GEO queries
+        has_location = bool(location and location.strip())
+        
+        system_prompt = f"""You are an AI query generator. Generate 20 realistic, natural-language questions that users might ask an AI assistant about this brand.
+
+Brand: {brand_name}
+Services/Products: {services}
+Location: {location if has_location else 'No specific location'}
+Industry: {industry}
+
+Divide queries evenly into 5 categories:
+- Brand (4 queries): Questions about the brand itself
+- Service/Product (4 queries): Questions about services/products offered
+- Competitor (4 queries): Questions comparing with alternatives
+- Local/GEO (4 queries): Location-based questions ({"include these" if has_location else "skip these - add 4 more Service/Product queries instead"})
+- Problem-solving (4 queries): Questions about solving industry problems
+
+Make queries natural, varied, and realistic. Avoid repetitive patterns.
+Output JSON array: [{{"id": 1, "category": "brand", "text": "What is {brand_name}?"}}, ...]"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.8,
+            max_tokens=2000,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Generate 20 queries for {brand_name}"}
+            ]
+        )
+        
+        # Parse JSON response
+        import json
+        raw_output = response.choices[0].message.content or ""
+        
+        # Clean and parse JSON
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        
+        try:
+            queries = json.loads(cleaned)
+            if isinstance(queries, list) and len(queries) == 20:
+                print(f"✅ Generated {len(queries)} dynamic AI queries")
+                return queries
+            else:
+                print(f"⚠️ Invalid query count ({len(queries) if isinstance(queries, list) else 'not list'}), using fallback")
+                return await _generate_fallback_queries(site_data)
+        except json.JSONDecodeError:
+            print("⚠️ Failed to parse JSON, using fallback queries")
+            return await _generate_fallback_queries(site_data)
+        
+    except Exception as e:
+        print(f"❌ Error generating dynamic queries: {e}")
+        return await _generate_fallback_queries(site_data)
+
+async def _generate_fallback_queries(site_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Fallback query generation if GPT-4 Mini fails"""
     
     site_info = site_data["site_info"]
     audit_data = site_data["audit_data"]
     
     queries = []
     query_id = 1
-    
-    print(f"🎯 Generating AI queries for: {site_info['brand_name']}")
     
     # 1. Brand Queries (4 queries)
     brand_queries = [
@@ -448,12 +529,8 @@ async def generate_ai_queries(site_data: Dict[str, Any]) -> List[Dict[str, Any]]
         query_id += 1
     
     # 3. Competitor Queries (4 queries)
-    competitors = audit_data.get("competitors", [])
-    if not competitors:
-        competitors = ["competitors", "alternatives", "other options"]
-    
     competitor_queries = [
-        f"{site_info['brand_name']} vs {competitors[0] if competitors else 'competitors'}",
+        f"{site_info['brand_name']} vs competitors",
         f"Alternatives to {site_info['brand_name']}",
         f"Best {products[0] if products else 'services'} providers",
         f"Compare {site_info['brand_name']} with other options"
@@ -518,7 +595,7 @@ async def generate_ai_queries(site_data: Dict[str, Any]) -> List[Dict[str, Any]]
         })
         query_id += 1
     
-    print(f"✅ Generated {len(queries)} AI queries across 5 categories")
+    print(f"✅ Generated {len(queries)} fallback queries")
     return queries
 
 async def simulate_ai_response(query: str, brand_name: str, site_data: Dict[str, Any]) -> str:
@@ -573,8 +650,66 @@ async def simulate_ai_response(query: str, brand_name: str, site_data: Dict[str,
         print(f"❌ Error simulating AI response: {e}")
         return f"AI response simulation failed: {str(e)}"
 
-def evaluate_brand_detection(response: str, brand_name: str) -> Dict[str, Any]:
-    """Evaluate if brand is mentioned in the response"""
+async def evaluate_brand_detection(response: str, brand_name: str) -> Dict[str, Any]:
+    """Evaluate if brand is mentioned using GPT-4 Mini semantic analysis"""
+    
+    try:
+        # Get OpenAI client
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("❌ OpenAI API key not found, using fallback brand detection")
+            return await _fallback_brand_detection(response, brand_name)
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        system_prompt = f"""Does this answer mention the brand "{brand_name}"? 
+Classify result as JSON:
+{{ "mentioned": true/false, "strength": "Weak/Medium/Strong" }}
+
+Rules:
+- Weak = briefly listed among many.
+- Medium = clearly included but not the main focus.
+- Strong = recommended, highlighted, or positioned as best.
+
+Return only JSON, no other text."""
+        
+        response_analysis = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.1,
+            max_tokens=100,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Answer: {response}"}
+            ]
+        )
+        
+        # Parse JSON response
+        import json
+        raw_output = response_analysis.choices[0].message.content or ""
+        
+        try:
+            result = json.loads(raw_output.strip())
+            if "mentioned" in result and "strength" in result:
+                return {
+                    "is_mentioned": result["mentioned"],
+                    "strength": result["strength"],
+                    "exact_mentions": 1 if result["mentioned"] else 0,
+                    "partial_mentions": 0
+                }
+            else:
+                print("⚠️ Invalid brand detection response, using fallback")
+                return await _fallback_brand_detection(response, brand_name)
+        except json.JSONDecodeError:
+            print("⚠️ Failed to parse brand detection JSON, using fallback")
+            return await _fallback_brand_detection(response, brand_name)
+        
+    except Exception as e:
+        print(f"❌ Error in brand detection: {e}")
+        return await _fallback_brand_detection(response, brand_name)
+
+async def _fallback_brand_detection(response: str, brand_name: str) -> Dict[str, Any]:
+    """Fallback brand detection using string matching"""
     
     response_lower = response.lower()
     brand_lower = brand_name.lower()
@@ -609,8 +744,58 @@ def evaluate_brand_detection(response: str, brand_name: str) -> Dict[str, Any]:
         "partial_mentions": partial_mentions
     }
 
-def extract_competitors(response: str, brand_name: str) -> List[str]:
-    """Extract competitor brand names from response"""
+async def extract_competitors(response: str, brand_name: str) -> List[str]:
+    """Extract competitor brand names using GPT-4 Mini semantic analysis"""
+    
+    try:
+        # Get OpenAI client
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("❌ OpenAI API key not found, using fallback competitor extraction")
+            return await _fallback_competitor_extraction(response, brand_name)
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        system_prompt = f"""Extract competitor brand names mentioned in this answer that offer similar services/products to "{brand_name}".
+Normalize duplicates (e.g., "Spark" and "Spark Car Wash" = "Spark").
+Return JSON: {{ "competitors": ["Spark", "SurferSEO"] }}
+
+Only include actual competitor brands, not generic terms or unrelated companies.
+Return only JSON, no other text."""
+        
+        competitor_analysis = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.1,
+            max_tokens=200,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Answer: {response}"}
+            ]
+        )
+        
+        # Parse JSON response
+        import json
+        raw_output = competitor_analysis.choices[0].message.content or ""
+        
+        try:
+            result = json.loads(raw_output.strip())
+            if "competitors" in result and isinstance(result["competitors"], list):
+                competitors = [comp.strip() for comp in result["competitors"] if comp.strip()]
+                return competitors[:5]  # Limit to top 5 competitors
+            else:
+                print("⚠️ Invalid competitor extraction response, using fallback")
+                return await _fallback_competitor_extraction(response, brand_name)
+        except json.JSONDecodeError:
+            print("⚠️ Failed to parse competitor extraction JSON, using fallback")
+            return await _fallback_competitor_extraction(response, brand_name)
+        
+    except Exception as e:
+        print(f"❌ Error in competitor extraction: {e}")
+        return await _fallback_competitor_extraction(response, brand_name)
+
+async def _fallback_competitor_extraction(response: str, brand_name: str) -> List[str]:
+    """Fallback competitor extraction using regex"""
     
     # Common competitor indicators
     competitor_indicators = [
@@ -646,8 +831,56 @@ def extract_competitors(response: str, brand_name: str) -> List[str]:
     
     return competitors[:5]  # Limit to top 5 competitors
 
-def evaluate_recommendation_strength(response: str, brand_name: str) -> str:
-    """Evaluate how strongly the brand is recommended"""
+async def evaluate_recommendation_strength(response: str, brand_name: str) -> str:
+    """Evaluate recommendation strength using GPT-4 Mini semantic analysis"""
+    
+    try:
+        # Get OpenAI client
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            print("❌ OpenAI API key not found, using fallback recommendation strength")
+            return await _fallback_recommendation_strength(response, brand_name)
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        system_prompt = f"""In this text, how is "{brand_name}" positioned?
+Options: "Best option" / "One of many" / "Not mentioned".
+Return JSON: {{ "recommendation": "Best option" }}
+
+Return only JSON, no other text."""
+        
+        recommendation_analysis = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.1,
+            max_tokens=50,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Text: {response}"}
+            ]
+        )
+        
+        # Parse JSON response
+        import json
+        raw_output = recommendation_analysis.choices[0].message.content or ""
+        
+        try:
+            result = json.loads(raw_output.strip())
+            if "recommendation" in result:
+                return result["recommendation"]
+            else:
+                print("⚠️ Invalid recommendation strength response, using fallback")
+                return await _fallback_recommendation_strength(response, brand_name)
+        except json.JSONDecodeError:
+            print("⚠️ Failed to parse recommendation strength JSON, using fallback")
+            return await _fallback_recommendation_strength(response, brand_name)
+        
+    except Exception as e:
+        print(f"❌ Error in recommendation strength analysis: {e}")
+        return await _fallback_recommendation_strength(response, brand_name)
+
+async def _fallback_recommendation_strength(response: str, brand_name: str) -> str:
+    """Fallback recommendation strength using keyword matching"""
     
     response_lower = response.lower()
     brand_lower = brand_name.lower()
@@ -703,27 +936,46 @@ async def save_query_results(site_id: str, query_id: int, query_text: str,
         print(f"❌ Error saving query result: {e}")
 
 def calculate_summary_metrics(results: List[Dict[str, Any]], brand_name: str) -> Dict[str, Any]:
-    """Calculate summary metrics from all query results"""
+    """Calculate weighted summary metrics from all query results"""
     
     total_queries = len(results)
     if total_queries == 0:
         return {
             "visibility_score": 0,
             "share_of_ai_voice": 0,
+            "strength_score": 0,
             "top_competitors": [],
             "total_queries": 0
         }
     
-    # Visibility Score
-    brand_mentioned_count = sum(1 for r in results if r["brand_detection"]["is_mentioned"])
-    visibility_score = (brand_mentioned_count / total_queries) * 100
+    # Category weights for realistic market position
+    category_weights = {
+        "brand": 1.0,           # Brand queries = 1x
+        "service_product": 1.5, # Service/Product queries = 1.5x
+        "competitor": 2.0,      # Competitor queries = 2x (most important)
+        "local_geo": 1.5,       # Local queries = 1.5x
+        "problem_solving": 1.5  # Problem-solving queries = 1.5x
+    }
     
-    # Share of AI Voice (SAV)
+    # Calculate weighted visibility score
+    weighted_score = 0
+    total_weight = 0
+    
+    for result in results:
+        category = result.get("category", "brand")
+        weight = category_weights.get(category, 1.0)
+        total_weight += weight
+        
+        if result["brand_detection"]["is_mentioned"]:
+            weighted_score += weight
+    
+    visibility_score = (weighted_score / total_weight) * 100 if total_weight > 0 else 0
+    
+    # Share of AI Voice (SAV) - brand vs competitor mentions
     all_competitors = []
     for result in results:
         all_competitors.extend(result["competitors"])
     
-    # Count brand mentions vs competitor mentions
     brand_mentions = sum(1 for r in results if r["brand_detection"]["is_mentioned"])
     competitor_mentions = len(all_competitors)
     
@@ -731,6 +983,18 @@ def calculate_summary_metrics(results: List[Dict[str, Any]], brand_name: str) ->
         share_of_ai_voice = 0
     else:
         share_of_ai_voice = (brand_mentions / (brand_mentions + competitor_mentions)) * 100
+    
+    # Strength Score - average strength converted to numeric (1-3)
+    strength_mapping = {"Weak": 1, "Medium": 2, "Strong": 3}
+    strength_scores = []
+    
+    for result in results:
+        if result["brand_detection"]["is_mentioned"]:
+            strength = result["brand_detection"]["strength"]
+            if strength in strength_mapping:
+                strength_scores.append(strength_mapping[strength])
+    
+    strength_score = sum(strength_scores) / len(strength_scores) if strength_scores else 0
     
     # Top Competitors
     from collections import Counter
@@ -743,10 +1007,16 @@ def calculate_summary_metrics(results: List[Dict[str, Any]], brand_name: str) ->
     return {
         "visibility_score": round(visibility_score, 1),
         "share_of_ai_voice": round(share_of_ai_voice, 1),
+        "strength_score": round(strength_score, 1),
         "top_competitors": top_competitors,
         "total_queries": total_queries,
         "brand_mentions": brand_mentions,
-        "competitor_mentions": competitor_mentions
+        "competitor_mentions": competitor_mentions,
+        "weighted_analysis": {
+            "category_weights": category_weights,
+            "total_weight": total_weight,
+            "weighted_score": weighted_score
+        }
     }
 
 # ---------- models ----------
@@ -1306,10 +1576,10 @@ async def test_query_visibility(req: QueryVisibilityRequest = Body(...)):
             # Simulate AI response
             ai_response = await simulate_ai_response(query["text"], brand_name, site_data)
             
-            # Run 3 evaluations
-            brand_detection = evaluate_brand_detection(ai_response, brand_name)
-            competitors = extract_competitors(ai_response, brand_name)
-            recommendation_strength = evaluate_recommendation_strength(ai_response, brand_name)
+            # Run 3 evaluations with GPT-4 Mini
+            brand_detection = await evaluate_brand_detection(ai_response, brand_name)
+            competitors = await extract_competitors(ai_response, brand_name)
+            recommendation_strength = await evaluate_recommendation_strength(ai_response, brand_name)
             
             # Save to Supabase
             evaluations = {

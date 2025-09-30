@@ -400,6 +400,355 @@ def generate_geo_recommendations(site_data: Dict[str, Any]) -> Dict[str, Any]:
         "total_recommendations": len(keywords) + len(questions)
     }
 
+async def generate_ai_queries(site_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Generate 20 AI queries split evenly across 5 categories"""
+    
+    site_info = site_data["site_info"]
+    audit_data = site_data["audit_data"]
+    
+    queries = []
+    query_id = 1
+    
+    print(f"🎯 Generating AI queries for: {site_info['brand_name']}")
+    
+    # 1. Brand Queries (4 queries)
+    brand_queries = [
+        f"What is {site_info['brand_name']}?",
+        f"How does {site_info['brand_name']} work?",
+        f"Is {site_info['brand_name']} reliable?",
+        f"What makes {site_info['brand_name']} different?"
+    ]
+    
+    for query in brand_queries:
+        queries.append({
+            "id": query_id,
+            "category": "brand",
+            "text": query
+        })
+        query_id += 1
+    
+    # 2. Service/Product Queries (4 queries)
+    products = audit_data.get("products", [])
+    if not products:
+        products = ["services", "solutions", "products"]
+    
+    service_queries = [
+        f"Best {products[0] if products else 'services'} for businesses",
+        f"How to choose {products[0] if products else 'services'}?",
+        f"What are the top {products[0] if products else 'services'}?",
+        f"Compare {products[0] if products else 'services'} options"
+    ]
+    
+    for query in service_queries:
+        queries.append({
+            "id": query_id,
+            "category": "service_product",
+            "text": query
+        })
+        query_id += 1
+    
+    # 3. Competitor Queries (4 queries)
+    competitors = audit_data.get("competitors", [])
+    if not competitors:
+        competitors = ["competitors", "alternatives", "other options"]
+    
+    competitor_queries = [
+        f"{site_info['brand_name']} vs {competitors[0] if competitors else 'competitors'}",
+        f"Alternatives to {site_info['brand_name']}",
+        f"Best {products[0] if products else 'services'} providers",
+        f"Compare {site_info['brand_name']} with other options"
+    ]
+    
+    for query in competitor_queries:
+        queries.append({
+            "id": query_id,
+            "category": "competitor",
+            "text": query
+        })
+        query_id += 1
+    
+    # 4. Local/GEO Queries (4 queries) - only if location exists
+    if site_info.get("location"):
+        location = site_info["location"]
+        geo_queries = [
+            f"Best {products[0] if products else 'services'} in {location}",
+            f"{site_info['brand_name']} in {location}",
+            f"Local {products[0] if products else 'services'} providers in {location}",
+            f"Where to find {site_info['brand_name']} in {location}?"
+        ]
+        
+        for query in geo_queries:
+            queries.append({
+                "id": query_id,
+                "category": "local_geo",
+                "text": query
+            })
+            query_id += 1
+    else:
+        # If no location, add more service/product queries
+        additional_queries = [
+            f"What are the benefits of {products[0] if products else 'services'}?",
+            f"How much does {products[0] if products else 'services'} cost?",
+            f"When should I use {products[0] if products else 'services'}?",
+            f"What problems does {products[0] if products else 'services'} solve?"
+        ]
+        
+        for query in additional_queries:
+            queries.append({
+                "id": query_id,
+                "category": "service_product",
+                "text": query
+            })
+            query_id += 1
+    
+    # 5. Problem-solving Queries (4 queries)
+    industry = site_info.get("industry", "business")
+    problem_queries = [
+        f"How to solve {industry} problems?",
+        f"What are common {industry} challenges?",
+        f"How to improve {industry} efficiency?",
+        f"What solutions exist for {industry} issues?"
+    ]
+    
+    for query in problem_queries:
+        queries.append({
+            "id": query_id,
+            "category": "problem_solving",
+            "text": query
+        })
+        query_id += 1
+    
+    print(f"✅ Generated {len(queries)} AI queries across 5 categories")
+    return queries
+
+async def simulate_ai_response(query: str, brand_name: str, site_data: Dict[str, Any]) -> str:
+    """Simulate AI assistant response using GPT-4 Mini"""
+    
+    try:
+        # Get OpenAI client
+        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "AI response simulation not available - API key missing"
+        
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        # Create context for the AI
+        site_info = site_data["site_info"]
+        audit_data = site_data["audit_data"]
+        
+        context = f"""
+        Brand: {site_info['brand_name']}
+        Description: {site_info.get('description', '')}
+        Location: {site_info.get('location', '')}
+        Industry: {site_info.get('industry', '')}
+        Products/Services: {', '.join(audit_data.get('products', []))}
+        Competitors: {', '.join(audit_data.get('competitors', []))}
+        """
+        
+        prompt = f"""
+        You are an AI assistant answering user questions. 
+        Provide a helpful, informative response to this query: "{query}"
+        
+        Context about the business:
+        {context}
+        
+        Answer naturally as an AI assistant would, mentioning relevant brands and services when appropriate.
+        Keep the response conversational and helpful.
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.7,
+            max_tokens=500,
+            messages=[
+                {"role": "system", "content": "You are a helpful AI assistant that provides informative answers to user questions."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        
+        return response.choices[0].message.content or "No response generated"
+        
+    except Exception as e:
+        print(f"❌ Error simulating AI response: {e}")
+        return f"AI response simulation failed: {str(e)}"
+
+def evaluate_brand_detection(response: str, brand_name: str) -> Dict[str, Any]:
+    """Evaluate if brand is mentioned in the response"""
+    
+    response_lower = response.lower()
+    brand_lower = brand_name.lower()
+    
+    # Check for exact brand name mentions
+    exact_mentions = response_lower.count(brand_lower)
+    
+    # Check for partial matches (first word of brand)
+    brand_words = brand_name.split()
+    if brand_words:
+        first_word = brand_words[0].lower()
+        partial_mentions = response_lower.count(first_word)
+    else:
+        partial_mentions = 0
+    
+    # Determine strength
+    if exact_mentions >= 2:
+        strength = "Strong"
+    elif exact_mentions >= 1:
+        strength = "Medium"
+    elif partial_mentions >= 1:
+        strength = "Weak"
+    else:
+        strength = "None"
+    
+    is_mentioned = exact_mentions > 0 or partial_mentions > 0
+    
+    return {
+        "is_mentioned": is_mentioned,
+        "strength": strength,
+        "exact_mentions": exact_mentions,
+        "partial_mentions": partial_mentions
+    }
+
+def extract_competitors(response: str, brand_name: str) -> List[str]:
+    """Extract competitor brand names from response"""
+    
+    # Common competitor indicators
+    competitor_indicators = [
+        "alternatives", "competitors", "other options", "similar services",
+        "like", "such as", "including", "also", "besides", "in addition to"
+    ]
+    
+    competitors = []
+    response_lower = response.lower()
+    
+    # Look for patterns that indicate competitors
+    for indicator in competitor_indicators:
+        if indicator in response_lower:
+            # Extract text around the indicator
+            start = response_lower.find(indicator)
+            if start != -1:
+                # Get context around the indicator
+                context_start = max(0, start - 100)
+                context_end = min(len(response), start + 200)
+                context = response[context_start:context_end]
+                
+                # Look for capitalized words (potential brand names)
+                import re
+                potential_brands = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', context)
+                
+                for brand in potential_brands:
+                    if brand.lower() != brand_name.lower() and len(brand) > 2:
+                        competitors.append(brand)
+    
+    # Remove duplicates and normalize
+    competitors = list(set(competitors))
+    competitors = [comp.strip() for comp in competitors if comp.strip()]
+    
+    return competitors[:5]  # Limit to top 5 competitors
+
+def evaluate_recommendation_strength(response: str, brand_name: str) -> str:
+    """Evaluate how strongly the brand is recommended"""
+    
+    response_lower = response.lower()
+    brand_lower = brand_name.lower()
+    
+    # Strong recommendation indicators
+    strong_indicators = [
+        "best", "recommended", "top choice", "highly recommend", "excellent",
+        "outstanding", "superior", "preferred", "leading", "premier"
+    ]
+    
+    # Weak recommendation indicators
+    weak_indicators = [
+        "one of many", "several options", "alternatives", "other choices",
+        "also consider", "in addition", "besides", "along with"
+    ]
+    
+    # Check for strong indicators
+    strong_count = sum(1 for indicator in strong_indicators if indicator in response_lower)
+    weak_count = sum(1 for indicator in weak_indicators if indicator in response_lower)
+    
+    # Check if brand is mentioned
+    brand_mentioned = brand_lower in response_lower
+    
+    if not brand_mentioned:
+        return "Not mentioned"
+    elif strong_count > weak_count:
+        return "Best option"
+    elif weak_count > 0:
+        return "One of many"
+    else:
+        return "One of many"
+
+async def save_query_results(site_id: str, query_id: int, query_text: str, 
+                             ai_response: str, evaluations: Dict[str, Any]) -> None:
+    """Save query results to Supabase"""
+    
+    try:
+        result_data = {
+            "site_id": site_id,
+            "query_id": query_id,
+            "query_text": query_text,
+            "ai_response": ai_response,
+            "brand_detection": evaluations["brand_detection"],
+            "competitors": evaluations["competitors"],
+            "recommendation_strength": evaluations["recommendation_strength"],
+            "created_at": datetime.now().isoformat()
+        }
+        
+        supabase.table("query_visibility_results").insert(result_data).execute()
+        print(f"✅ Saved query result for query {query_id}")
+        
+    except Exception as e:
+        print(f"❌ Error saving query result: {e}")
+
+def calculate_summary_metrics(results: List[Dict[str, Any]], brand_name: str) -> Dict[str, Any]:
+    """Calculate summary metrics from all query results"""
+    
+    total_queries = len(results)
+    if total_queries == 0:
+        return {
+            "visibility_score": 0,
+            "share_of_ai_voice": 0,
+            "top_competitors": [],
+            "total_queries": 0
+        }
+    
+    # Visibility Score
+    brand_mentioned_count = sum(1 for r in results if r["brand_detection"]["is_mentioned"])
+    visibility_score = (brand_mentioned_count / total_queries) * 100
+    
+    # Share of AI Voice (SAV)
+    all_competitors = []
+    for result in results:
+        all_competitors.extend(result["competitors"])
+    
+    # Count brand mentions vs competitor mentions
+    brand_mentions = sum(1 for r in results if r["brand_detection"]["is_mentioned"])
+    competitor_mentions = len(all_competitors)
+    
+    if brand_mentions + competitor_mentions == 0:
+        share_of_ai_voice = 0
+    else:
+        share_of_ai_voice = (brand_mentions / (brand_mentions + competitor_mentions)) * 100
+    
+    # Top Competitors
+    from collections import Counter
+    competitor_counts = Counter(all_competitors)
+    top_competitors = [
+        {"name": name, "mentions": count} 
+        for name, count in competitor_counts.most_common(5)
+    ]
+    
+    return {
+        "visibility_score": round(visibility_score, 1),
+        "share_of_ai_voice": round(share_of_ai_voice, 1),
+        "top_competitors": top_competitors,
+        "total_queries": total_queries,
+        "brand_mentions": brand_mentions,
+        "competitor_mentions": competitor_mentions
+    }
+
 # ---------- models ----------
 class AuditRequest(BaseModel):
     url: str
@@ -437,6 +786,20 @@ class KeywordRecommendationRequest(BaseModel):
     language: Optional[str] = "en"
     max_keywords: Optional[int] = 6
     max_questions: Optional[int] = 5
+
+class QueryVisibilityRequest(BaseModel):
+    site_id: str
+    selected_queries: List[int]  # IDs of selected queries (max 8)
+    language: Optional[str] = "en"
+
+class QueryVisibilityResponse(BaseModel):
+    success: bool
+    site_id: str
+    total_queries: int
+    selected_queries: int
+    results: List[Dict[str, Any]]
+    summary: Dict[str, Any]
+    generated_at: str
 
 class AuditRequest(BaseModel):
     url: str
@@ -866,6 +1229,130 @@ async def test_supabase():
     except Exception as e:
         print(f"❌ Supabase test failed: {e}")
         return {"error": f"Supabase test failed: {str(e)}"}
+
+# ---------- /generate-ai-queries ----------
+@app.post("/generate-ai-queries")
+async def generate_ai_queries_endpoint(req: KeywordRecommendationRequest = Body(...)):
+    """
+    Generate 20 AI queries for testing brand visibility in AI responses
+    """
+    try:
+        print(f"🎯 Generating AI queries for site: {req.site_id}")
+        
+        # Get comprehensive site data
+        site_data = await get_comprehensive_site_data(req.site_id)
+        
+        if not site_data:
+            return {"error": "Site not found", "message": "Please audit a website first"}
+        
+        # Generate 20 queries across 5 categories
+        queries = await generate_ai_queries(site_data)
+        
+        print(f"✅ Generated {len(queries)} AI queries")
+        
+        return {
+            "success": True,
+            "site_id": req.site_id,
+            "queries": queries,
+            "total_queries": len(queries),
+            "categories": {
+                "brand": len([q for q in queries if q["category"] == "brand"]),
+                "service_product": len([q for q in queries if q["category"] == "service_product"]),
+                "competitor": len([q for q in queries if q["category"] == "competitor"]),
+                "local_geo": len([q for q in queries if q["category"] == "local_geo"]),
+                "problem_solving": len([q for q in queries if q["category"] == "problem_solving"])
+            },
+            "generated_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ AI query generation failed: {str(e)}")
+        return {"error": f"AI query generation failed: {str(e)}"}
+
+# ---------- /test-query-visibility ----------
+@app.post("/test-query-visibility")
+async def test_query_visibility(req: QueryVisibilityRequest = Body(...)):
+    """
+    Test brand visibility in AI responses for selected queries
+    """
+    try:
+        print(f"🔍 Testing query visibility for site: {req.site_id}")
+        print(f"📊 Selected queries: {req.selected_queries}")
+        
+        # Validate selected queries (max 8)
+        if len(req.selected_queries) > 8:
+            return {"error": "Maximum 8 queries allowed"}
+        
+        # Get comprehensive site data
+        site_data = await get_comprehensive_site_data(req.site_id)
+        
+        if not site_data:
+            return {"error": "Site not found", "message": "Please audit a website first"}
+        
+        # Generate all queries to get the selected ones
+        all_queries = await generate_ai_queries(site_data)
+        selected_queries = [q for q in all_queries if q["id"] in req.selected_queries]
+        
+        if len(selected_queries) != len(req.selected_queries):
+            return {"error": "Some selected queries not found"}
+        
+        results = []
+        brand_name = site_data["site_info"]["brand_name"]
+        
+        # Process each selected query
+        for query in selected_queries:
+            print(f"🤖 Processing query {query['id']}: {query['text']}")
+            
+            # Simulate AI response
+            ai_response = await simulate_ai_response(query["text"], brand_name, site_data)
+            
+            # Run 3 evaluations
+            brand_detection = evaluate_brand_detection(ai_response, brand_name)
+            competitors = extract_competitors(ai_response, brand_name)
+            recommendation_strength = evaluate_recommendation_strength(ai_response, brand_name)
+            
+            # Save to Supabase
+            evaluations = {
+                "brand_detection": brand_detection,
+                "competitors": competitors,
+                "recommendation_strength": recommendation_strength
+            }
+            
+            await save_query_results(req.site_id, query["id"], query["text"], ai_response, evaluations)
+            
+            # Add to results
+            result = {
+                "query_id": query["id"],
+                "query_text": query["text"],
+                "category": query["category"],
+                "ai_response": ai_response,
+                "brand_detection": brand_detection,
+                "competitors": competitors,
+                "recommendation_strength": recommendation_strength
+            }
+            
+            results.append(result)
+        
+        # Calculate summary metrics
+        summary = calculate_summary_metrics(results, brand_name)
+        
+        print(f"✅ Query visibility test completed")
+        print(f"📊 Visibility Score: {summary['visibility_score']}%")
+        print(f"🎯 Share of AI Voice: {summary['share_of_ai_voice']}%")
+        
+        return {
+            "success": True,
+            "site_id": req.site_id,
+            "total_queries": len(all_queries),
+            "selected_queries": len(selected_queries),
+            "results": results,
+            "summary": summary,
+            "generated_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Query visibility test failed: {str(e)}")
+        return {"error": f"Query visibility test failed: {str(e)}"}
 
 # ---------- /recommend-keywords ----------
 @app.post("/recommend-keywords")

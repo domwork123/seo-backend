@@ -1,16 +1,23 @@
 # main.py — /audit, /score, /score-bulk, /optimize
-from fastapi import FastAPI, Query, Body
+from fastapi import FastAPI, Query, Body, Request, Response, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import json
 import os
+import stripe
 from supabase import create_client, Client
 from fastapi.middleware.cors import CORSMiddleware   # 👈 ADD THIS LINE
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Stripe configuration
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+NEXT_PUBLIC_SITE_URL = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
 
 from aeo_geo_scoring import score_website
 from aeo_geo_optimizer import detect_faq, extract_images, optimize_meta_description, run_llm_queries, check_geo_signals, generate_blog_post
@@ -69,6 +76,34 @@ def detect_lang(text: str) -> str:
         return 'en'
     else:
         return 'unknown'
+
+async def get_user_from_session(request: Request) -> Dict[str, Any]:
+    """
+    Extract user information from Supabase session in request cookies.
+    Returns user data if authenticated, raises HTTPException if not.
+    """
+    try:
+        # Get session token from cookies
+        session_token = request.cookies.get('sb-access-token') or request.cookies.get('supabase-auth-token')
+        
+        if not session_token:
+            raise HTTPException(status_code=401, detail="No session token found")
+        
+        # Verify session with Supabase
+        response = supabase.auth.get_user(session_token)
+        
+        if not response.user:
+            raise HTTPException(status_code=401, detail="Invalid session token")
+        
+        return {
+            "id": response.user.id,
+            "email": response.user.email,
+            "user_metadata": response.user.user_metadata
+        }
+        
+    except Exception as e:
+        print(f"❌ Authentication error: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
 def get_site_language(site_id: str) -> str:
     """
@@ -2420,4 +2455,136 @@ async def audit_new(req: NewAuditRequest = Body(...)):
             "error": f"Audit failed: {str(e)}",
             "site_id": site_id if 'site_id' in locals() else None
         }
+
+# ---------- /api/checkout ----------
+@app.post("/api/checkout")
+async def create_checkout_session(request: Request):
+    """
+    Create Stripe checkout session for subscription.
+    Requires authenticated user from Supabase session.
+    """
+    try:
+        # Get authenticated user
+        user = await get_user_from_session(request)
+        
+        # Create Stripe checkout session
+        checkout_session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{
+                "price": STRIPE_PRICE_ID,
+                "quantity": 1
+            }],
+            customer_email=user["email"],
+            client_reference_id=user["id"],
+            success_url=f"{NEXT_PUBLIC_SITE_URL}/dashboard?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{NEXT_PUBLIC_SITE_URL}/pricing"
+        )
+        
+        return {"url": checkout_session.url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Checkout session creation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Checkout session creation failed: {str(e)}")
+
+# ---------- /api/stripe/webhook ----------
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """
+    Handle Stripe webhook events for subscription management.
+    Updates Supabase profiles table based on subscription events.
+    """
+    try:
+        # Get raw body and signature
+        body = await request.body()
+        signature = request.headers.get("stripe-signature")
+        
+        if not signature:
+            print("❌ No Stripe signature found")
+            return Response(status_code=400)
+        
+        # Verify webhook signature
+        try:
+            event = stripe.Webhook.construct_event(
+                body, signature, STRIPE_WEBHOOK_SECRET
+            )
+        except ValueError as e:
+            print(f"❌ Invalid payload: {e}")
+            return Response(status_code=400)
+        except stripe.error.SignatureVerificationError as e:
+            print(f"❌ Invalid signature: {e}")
+            return Response(status_code=400)
+        
+        # Handle the event
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+            user_id = session.get("client_reference_id")
+            
+            if user_id:
+                # Get subscription details
+                subscription_id = session.get("subscription")
+                customer_id = session.get("customer")
+                
+                # Update Supabase profiles table
+                try:
+                    supabase.table("profiles").update({
+                        "is_active": True,
+                        "stripe_customer_id": customer_id,
+                        "stripe_subscription_id": subscription_id
+                    }).eq("id", user_id).execute()
+                    
+                    print(f"✅ Updated profile for user {user_id}: active=True")
+                except Exception as e:
+                    print(f"❌ Failed to update profile for user {user_id}: {e}")
+        
+        elif event["type"] == "customer.subscription.updated":
+            subscription = event["data"]["object"]
+            customer_id = subscription.get("customer")
+            
+            # Find user by customer_id
+            try:
+                profile_result = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).execute()
+                
+                if profile_result.data:
+                    user_id = profile_result.data[0]["id"]
+                    
+                    # Update subscription status
+                    is_active = subscription.get("status") in ["active", "trialing"]
+                    current_period_end = subscription.get("current_period_end")
+                    
+                    supabase.table("profiles").update({
+                        "is_active": is_active,
+                        "current_period_end": current_period_end
+                    }).eq("id", user_id).execute()
+                    
+                    print(f"✅ Updated subscription for user {user_id}: active={is_active}")
+            except Exception as e:
+                print(f"❌ Failed to update subscription: {e}")
+        
+        elif event["type"] in ["customer.subscription.deleted", "invoice.payment_failed"]:
+            subscription = event["data"]["object"]
+            customer_id = subscription.get("customer")
+            
+            # Find user by customer_id
+            try:
+                profile_result = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).execute()
+                
+                if profile_result.data:
+                    user_id = profile_result.data[0]["id"]
+                    
+                    # Deactivate subscription
+                    supabase.table("profiles").update({
+                        "is_active": False
+                    }).eq("id", user_id).execute()
+                    
+                    print(f"✅ Deactivated subscription for user {user_id}")
+            except Exception as e:
+                print(f"❌ Failed to deactivate subscription: {e}")
+        
+        return Response(status_code=200)
+        
+    except Exception as e:
+        print(f"❌ Webhook processing failed: {e}")
+        return Response(status_code=500)
 

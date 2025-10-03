@@ -79,21 +79,32 @@ def detect_lang(text: str) -> str:
 
 async def get_user_from_session(request: Request) -> Dict[str, Any]:
     """
-    Extract user information from Supabase session in request cookies.
+    Extract user information from Supabase session in request headers or cookies.
     Returns user data if authenticated, raises HTTPException if not.
     """
     try:
-        # Get session token from cookies
-        session_token = request.cookies.get('sb-access-token') or request.cookies.get('supabase-auth-token')
+        # Get session token from Authorization header first, then cookies
+        auth_header = request.headers.get("Authorization")
+        session_token = None
+        
+        if auth_header and auth_header.startswith("Bearer "):
+            session_token = auth_header[7:]  # Remove "Bearer " prefix
+        else:
+            # Fallback to cookies
+            session_token = request.cookies.get('sb-access-token') or request.cookies.get('supabase-auth-token')
         
         if not session_token:
             raise HTTPException(status_code=401, detail="No session token found")
+        
+        print(f"🔐 Authenticating with token: {session_token[:20]}...")
         
         # Verify session with Supabase
         response = supabase.auth.get_user(session_token)
         
         if not response.user:
             raise HTTPException(status_code=401, detail="Invalid session token")
+        
+        print(f"✅ User authenticated: {response.user.email}")
         
         return {
             "id": response.user.id,

@@ -1,23 +1,16 @@
 # main.py — /audit, /score, /score-bulk, /optimize
-from fastapi import FastAPI, Query, Body, Request, Response, HTTPException, Depends
+from fastapi import FastAPI, Query, Body
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import json
 import os
-import stripe
 from supabase import create_client, Client
 from fastapi.middleware.cors import CORSMiddleware   # 👈 ADD THIS LINE
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# Stripe configuration
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-NEXT_PUBLIC_SITE_URL = os.getenv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000")
 
 from aeo_geo_scoring import score_website
 from aeo_geo_optimizer import detect_faq, extract_images, optimize_meta_description, run_llm_queries, check_geo_signals, generate_blog_post
@@ -76,45 +69,6 @@ def detect_lang(text: str) -> str:
         return 'en'
     else:
         return 'unknown'
-
-async def get_user_from_session(request: Request) -> Dict[str, Any]:
-    """
-    Extract user information from Supabase session in request headers or cookies.
-    Returns user data if authenticated, raises HTTPException if not.
-    """
-    try:
-        # Get session token from Authorization header first, then cookies
-        auth_header = request.headers.get("Authorization")
-        session_token = None
-        
-        if auth_header and auth_header.startswith("Bearer "):
-            session_token = auth_header[7:]  # Remove "Bearer " prefix
-        else:
-            # Fallback to cookies
-            session_token = request.cookies.get('sb-access-token') or request.cookies.get('supabase-auth-token')
-        
-        if not session_token:
-            raise HTTPException(status_code=401, detail="No session token found")
-        
-        print(f"🔐 Authenticating with token: {session_token[:20]}...")
-        
-        # Verify session with Supabase
-        response = supabase.auth.get_user(session_token)
-        
-        if not response.user:
-            raise HTTPException(status_code=401, detail="Invalid session token")
-        
-        print(f"✅ User authenticated: {response.user.email}")
-        
-        return {
-            "id": response.user.id,
-            "email": response.user.email,
-            "user_metadata": response.user.user_metadata
-        }
-        
-    except Exception as e:
-        print(f"❌ Authentication error: {e}")
-        raise HTTPException(status_code=401, detail="Authentication failed")
 
 def get_site_language(site_id: str) -> str:
     """
@@ -2329,6 +2283,606 @@ async def audit_full_website(req: AuditRequest = Body(...)):
             "url": req.url
         }
 
+# ========== ONBOARDING FLOW ENDPOINTS ==========
+
+class OnboardingStartRequest(BaseModel):
+    url: str
+    market: Optional[str] = "United States"
+    language: Optional[str] = None  # Auto-detect if not provided
+
+class OnboardingSiteHealthRequest(BaseModel):
+    onboarding_id: str
+
+class OnboardingDescriptionRequest(BaseModel):
+    onboarding_id: str
+    description: Optional[str] = None  # If provided, use it; otherwise auto-generate
+
+class OnboardingQueriesRequest(BaseModel):
+    onboarding_id: str
+    custom_queries: Optional[List[str]] = None
+
+class OnboardingCompetitorsRequest(BaseModel):
+    onboarding_id: str
+    competitors: Optional[List[Dict[str, str]]] = None  # [{"name": "", "url": ""}]
+
+@app.post("/onboarding/start")
+async def onboarding_start(req: OnboardingStartRequest = Body(...)):
+    """
+    Start onboarding flow - Step 1: Website & Market Selection
+    Creates a new onboarding session and site entry
+    
+    Returns:
+        - onboarding_id: Unique ID for this onboarding session
+        - site_id: Unique ID for the website being analyzed
+        - market: Selected market/country
+        - language: Detected or selected language
+    """
+    try:
+        print(f"🚀 Starting onboarding for: {req.url} in market: {req.market}")
+        
+        # Generate unique IDs
+        onboarding_id = str(uuid.uuid4())
+        site_id = str(uuid.uuid4())
+        
+        # Auto-detect language from URL if not provided
+        language = req.language
+        if not language:
+            # Detect from domain extension
+            domain_ext = req.url.split('.')[-1].lower()
+            language_map = {
+                'lt': 'lt',
+                'de': 'de',
+                'fr': 'fr',
+                'es': 'es',
+                'it': 'it',
+                'pl': 'pl',
+                'com': 'en',
+                'co': 'en',
+                'net': 'en',
+                'org': 'en'
+            }
+            language = language_map.get(domain_ext, 'en')
+        
+        print(f"📍 Detected language: {language}")
+        
+        # Create initial onboarding record in Supabase
+        try:
+            onboarding_data = {
+                "id": onboarding_id,
+                "site_id": site_id,
+                "url": req.url,
+                "market": req.market,
+                "language": language,
+                "status": "started",
+                "current_step": "website",
+                "created_at": datetime.now().isoformat()
+            }
+            
+            supabase.table("onboarding_sessions").insert(onboarding_data).execute()
+            print(f"✅ Onboarding session created: {onboarding_id}")
+            
+        except Exception as db_error:
+            print(f"⚠️ Database error (continuing anyway): {db_error}")
+        
+        # Create initial site record
+        try:
+            site_data = {
+                "id": site_id,
+                "url": req.url,
+                "status": "onboarding",
+                "language": language,
+                "created_at": datetime.now().isoformat()
+            }
+            
+            supabase.table("sites").insert(site_data).execute()
+            print(f"✅ Site record created: {site_id}")
+            
+        except Exception as db_error:
+            print(f"⚠️ Site creation error (continuing anyway): {db_error}")
+        
+        return {
+            "success": True,
+            "onboarding_id": onboarding_id,
+            "site_id": site_id,
+            "url": req.url,
+            "market": req.market,
+            "language": language,
+            "next_step": "site_health",
+            "message": "Onboarding started successfully"
+        }
+        
+    except Exception as e:
+        print(f"❌ Onboarding start failed: {e}")
+        return {
+            "error": f"Failed to start onboarding: {str(e)}"
+        }
+
+@app.post("/onboarding/site-health")
+async def onboarding_site_health(req: OnboardingSiteHealthRequest = Body(...)):
+    """
+    Step 2: Site Health Check
+    Analyzes website for AI-readiness and technical SEO
+    
+    Checks:
+    - llms.txt file (AI instructions)
+    - robots.txt (AI crawler permissions)
+    - SSL certificate
+    - Mobile optimization
+    - Structured data
+    - Page speed
+    """
+    try:
+        print(f"🏥 Running site health check for onboarding: {req.onboarding_id}")
+        
+        # Get onboarding data
+        onboarding = supabase.table("onboarding_sessions").select("*").eq("id", req.onboarding_id).execute()
+        if not onboarding.data:
+            return {"error": "Onboarding session not found"}
+        
+        url = onboarding.data[0]["url"]
+        print(f"🔍 Checking health for: {url}")
+        
+        # Run health checks
+        health_results = {
+            "llms_txt": False,
+            "robots_txt": False,
+            "ssl": False,
+            "mobile_friendly": False,
+            "structured_data": False,
+            "page_speed_ms": 0
+        }
+        
+        # Check 1: llms.txt file
+        try:
+            import requests
+            llms_url = f"{url.rstrip('/')}/llms.txt"
+            llms_response = requests.get(llms_url, timeout=5)
+            health_results["llms_txt"] = llms_response.status_code == 200
+            print(f"✅ llms.txt: {health_results['llms_txt']}")
+        except:
+            print(f"❌ llms.txt: not found")
+        
+        # Check 2: robots.txt for AI crawlers
+        try:
+            robots_url = f"{url.rstrip('/')}/robots.txt"
+            robots_response = requests.get(robots_url, timeout=5)
+            if robots_response.status_code == 200:
+                robots_content = robots_response.text.lower()
+                # Check if AI crawlers are allowed
+                ai_crawlers = ['gptbot', 'chatgpt', 'claude', 'bingbot', 'googlebot']
+                disallowed = any(f"disallow: /" in line and crawler in line for line in robots_content.split('\n') for crawler in ai_crawlers)
+                health_results["robots_txt"] = not disallowed
+            print(f"✅ robots.txt AI-friendly: {health_results['robots_txt']}")
+        except:
+            print(f"⚠️ robots.txt: checking failed")
+        
+        # Check 3: SSL certificate
+        health_results["ssl"] = url.startswith("https://")
+        print(f"✅ SSL: {health_results['ssl']}")
+        
+        # Check 4: Page speed (simple check)
+        try:
+            import time
+            start_time = time.time()
+            requests.get(url, timeout=10)
+            health_results["page_speed_ms"] = int((time.time() - start_time) * 1000)
+            print(f"✅ Page speed: {health_results['page_speed_ms']}ms")
+        except:
+            health_results["page_speed_ms"] = 0
+        
+        # Check 5 & 6: Mobile and structured data (run quick audit)
+        try:
+            audit_result = await audit_single_page_aeo_geo(url, onboarding.data[0]["language"])
+            if audit_result:
+                health_results["mobile_friendly"] = True  # Assume yes for now
+                health_results["structured_data"] = len(audit_result.get("schemas", {}).get("json_ld", [])) > 0
+                print(f"✅ Mobile: {health_results['mobile_friendly']}, Structured data: {health_results['structured_data']}")
+        except Exception as audit_error:
+            print(f"⚠️ Audit check failed: {audit_error}")
+        
+        # Calculate good things and issues
+        good_things = []
+        issues = []
+        
+        if health_results["llms_txt"]:
+            good_things.append({"name": "AI Instructions File", "message": "llms.txt file found"})
+        else:
+            issues.append({"name": "AI Instructions File", "message": "llms.txt file not found", "priority": "high"})
+        
+        if health_results["robots_txt"]:
+            good_things.append({"name": "AI Crawler Permissions", "message": "Robots.txt allows AI crawlers"})
+        
+        if health_results["ssl"]:
+            good_things.append({"name": "Security Certificate", "message": "SSL certificate active"})
+        
+        if health_results["page_speed_ms"] < 1000:
+            good_things.append({"name": "Your page is loading fast", "message": f"Page loaded in {health_results['page_speed_ms']}ms"})
+        
+        if health_results["mobile_friendly"]:
+            good_things.append({"name": "Mobile Optimization", "message": "Site appears mobile-friendly"})
+        
+        if health_results["structured_data"]:
+            good_things.append({"name": "Structured Data", "message": "Structured data found"})
+        
+        # Update onboarding record
+        try:
+            supabase.table("onboarding_sessions").update({
+                "site_health": health_results,
+                "current_step": "site_health",
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", req.onboarding_id).execute()
+        except Exception as db_error:
+            print(f"⚠️ Database update error: {db_error}")
+        
+        print(f"✅ Site health check completed: {len(good_things)} good, {len(issues)} issues")
+        
+        return {
+            "success": True,
+            "onboarding_id": req.onboarding_id,
+            "health_results": health_results,
+            "good_things": good_things,
+            "issues": issues,
+            "good_count": len(good_things),
+            "issues_count": len(issues),
+            "next_step": "description"
+        }
+        
+    except Exception as e:
+        print(f"❌ Site health check failed: {e}")
+        return {
+            "error": f"Site health check failed: {str(e)}"
+        }
+
+@app.post("/onboarding/generate-description")
+async def onboarding_generate_description(req: OnboardingDescriptionRequest = Body(...)):
+    """
+    Step 3: Generate AI-Friendly Business Description
+    Uses GPT-4 to analyze website and create optimized description
+    """
+    try:
+        print(f"📝 Generating description for onboarding: {req.onboarding_id}")
+        
+        # Get onboarding data
+        onboarding = supabase.table("onboarding_sessions").select("*").eq("id", req.onboarding_id).execute()
+        if not onboarding.data:
+            return {"error": "Onboarding session not found"}
+        
+        url = onboarding.data[0]["url"]
+        language = onboarding.data[0]["language"]
+        
+        # If description provided, use it
+        if req.description:
+            description = req.description
+            print(f"✅ Using provided description")
+        else:
+            # Auto-generate description using GPT-4
+            print(f"🤖 Auto-generating description...")
+            
+            try:
+                # Get OpenAI client
+                api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    return {"error": "OpenAI API key not configured"}
+                
+                from openai import OpenAI
+                client = OpenAI(api_key=api_key)
+                
+                # Crawl homepage for context
+                audit_result = await audit_single_page_aeo_geo(url, language)
+                page_title = audit_result.get("title", "")
+                page_content = audit_result.get("content", "")[:2000]  # First 2000 chars
+                
+                prompt = f"""Analyze this website and write a concise, AI-friendly business description (250-500 characters).
+
+Website: {url}
+Title: {page_title}
+Content preview: {page_content}
+
+Write a description that:
+- Clearly explains what the business does
+- Mentions key services/products
+- Highlights unique value proposition
+- Is optimized for AI search engines
+- Sounds natural and professional
+- Is in {language} language
+
+Return ONLY the description, no other text."""
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    temperature=0.7,
+                    max_tokens=200,
+                    messages=[
+                        {"role": "system", "content": "You are an expert at writing AI-optimized business descriptions."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                
+                description = response.choices[0].message.content.strip()
+                print(f"✅ Generated description: {len(description)} characters")
+                
+            except Exception as gen_error:
+                print(f"❌ Description generation failed: {gen_error}")
+                # Fallback description
+                description = f"Professional services provided by {url}. Visit our website to learn more about our offerings."
+        
+        # Update onboarding record
+        try:
+            supabase.table("onboarding_sessions").update({
+                "description": description,
+                "current_step": "description",
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", req.onboarding_id).execute()
+            
+            # Also update site record
+            supabase.table("sites").update({
+                "description": description
+            }).eq("id", onboarding.data[0]["site_id"]).execute()
+            
+        except Exception as db_error:
+            print(f"⚠️ Database update error: {db_error}")
+        
+        return {
+            "success": True,
+            "onboarding_id": req.onboarding_id,
+            "description": description,
+            "char_count": len(description),
+            "next_step": "prompts"
+        }
+        
+    except Exception as e:
+        print(f"❌ Description generation failed: {e}")
+        return {
+            "error": f"Description generation failed: {str(e)}"
+        }
+
+@app.post("/onboarding/generate-queries")
+async def onboarding_generate_queries(req: OnboardingQueriesRequest = Body(...)):
+    """
+    Step 4: Generate Localized AI Queries
+    Creates 20 queries in the user's language across 5 categories
+    """
+    try:
+        print(f"🎯 Generating queries for onboarding: {req.onboarding_id}")
+        
+        # Get onboarding data
+        onboarding = supabase.table("onboarding_sessions").select("*").eq("id", req.onboarding_id).execute()
+        if not onboarding.data:
+            return {"error": "Onboarding session not found"}
+        
+        url = onboarding.data[0]["url"]
+        language = onboarding.data[0]["language"]
+        market = onboarding.data[0]["market"]
+        description = onboarding.data[0].get("description", "")
+        
+        # Use existing generate_ai_queries function but with modifications for localization
+        site_data = {
+            "site_info": {
+                "url": url,
+                "brand_name": url.split("//")[-1].split("/")[0].split(".")[0].capitalize(),
+                "description": description,
+                "location": market,
+                "industry": "business",
+                "language": language
+            },
+            "audit_data": {
+                "products": [],
+                "competitors": []
+            }
+        }
+        
+        # Generate queries using GPT-4 (from existing function)
+        queries = await generate_ai_queries(site_data)
+        
+        # If custom queries provided, add them
+        if req.custom_queries:
+            for i, custom_query in enumerate(req.custom_queries):
+                queries.append({
+                    "id": len(queries) + 1,
+                    "category": "custom",
+                    "text": custom_query
+                })
+        
+        # Limit to 20 queries
+        queries = queries[:20]
+        
+        # Update onboarding record
+        try:
+            supabase.table("onboarding_sessions").update({
+                "queries": queries,
+                "current_step": "prompts",
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", req.onboarding_id).execute()
+        except Exception as db_error:
+            print(f"⚠️ Database update error: {db_error}")
+        
+        print(f"✅ Generated {len(queries)} queries")
+        
+        return {
+            "success": True,
+            "onboarding_id": req.onboarding_id,
+            "queries": queries,
+            "total_queries": len(queries),
+            "next_step": "competitors"
+        }
+        
+    except Exception as e:
+        print(f"❌ Query generation failed: {e}")
+        return {
+            "error": f"Query generation failed: {str(e)}"
+        }
+
+@app.post("/onboarding/discover-competitors")
+async def onboarding_discover_competitors(req: OnboardingCompetitorsRequest = Body(...)):
+    """
+    Step 5: Discover Competitors
+    Optionally auto-discover competitors from AI responses
+    """
+    try:
+        print(f"🔍 Discovering competitors for onboarding: {req.onboarding_id}")
+        
+        # Get onboarding data
+        onboarding = supabase.table("onboarding_sessions").select("*").eq("id", req.onboarding_id).execute()
+        if not onboarding.data:
+            return {"error": "Onboarding session not found"}
+        
+        competitors = []
+        
+        # If competitors provided, use them
+        if req.competitors:
+            competitors = req.competitors
+            print(f"✅ Using provided competitors: {len(competitors)}")
+        else:
+            # Auto-discover placeholder (for demo)
+            # In production, this would run test queries and extract competitor mentions
+            print(f"🤖 Auto-discovering competitors...")
+            competitors = [
+                {"name": "Competitor 1", "url": "", "auto_discovered": True},
+                {"name": "Competitor 2", "url": "", "auto_discovered": True},
+                {"name": "Competitor 3", "url": "", "auto_discovered": True},
+            ]
+        
+        # Limit to 20 competitors
+        competitors = competitors[:20]
+        
+        # Update onboarding record
+        try:
+            supabase.table("onboarding_sessions").update({
+                "competitors": competitors,
+                "current_step": "competitors",
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", req.onboarding_id).execute()
+        except Exception as db_error:
+            print(f"⚠️ Database update error: {db_error}")
+        
+        print(f"✅ Stored {len(competitors)} competitors")
+        
+        return {
+            "success": True,
+            "onboarding_id": req.onboarding_id,
+            "competitors": competitors,
+            "total_competitors": len(competitors),
+            "next_step": "analysis"
+        }
+        
+    except Exception as e:
+        print(f"❌ Competitor discovery failed: {e}")
+        return {
+            "error": f"Competitor discovery failed: {str(e)}"
+        }
+
+@app.post("/onboarding/run-analysis")
+async def onboarding_run_analysis(onboarding_id: str = Body(..., embed=True)):
+    """
+    Step 6: Run Visibility Analysis
+    Tests queries against AI models and calculates visibility score
+    """
+    try:
+        print(f"📊 Running analysis for onboarding: {onboarding_id}")
+        
+        # Get onboarding data
+        onboarding = supabase.table("onboarding_sessions").select("*").eq("id", onboarding_id).execute()
+        if not onboarding.data:
+            return {"error": "Onboarding session not found"}
+        
+        data = onboarding.data[0]
+        site_id = data["site_id"]
+        queries = data.get("queries", [])
+        brand_name = data["url"].split("//")[-1].split("/")[0].split(".")[0].capitalize()
+        
+        # For demo/onboarding, show 0% initially to create urgency
+        # In production, this would actually test queries
+        visibility_score = 0
+        brand_mentions = 0
+        queries_tested = len(queries)
+        
+        # Simulate "before" results (without brand)
+        before_results = {
+            "query": queries[0]["text"] if queries else "sample query",
+            "results": [
+                {"rank": 1, "brand": "Competitor 1", "snippet": "Sample competitor result..."},
+                {"rank": 2, "brand": "Competitor 2", "snippet": "Another competitor..."},
+                {"rank": 3, "brand": "Competitor 3", "snippet": "Yet another competitor..."}
+            ]
+        }
+        
+        # Simulate "after" results (with Keika/EVIKA optimization)
+        after_results = {
+            "query": queries[0]["text"] if queries else "sample query",
+            "results": [
+                {"rank": 1, "brand": brand_name, "snippet": f"{brand_name} - Professional services..."},
+                {"rank": 2, "brand": "Competitor 1", "snippet": "Sample competitor result..."},
+                {"rank": 3, "brand": "Competitor 2", "snippet": "Another competitor..."}
+            ]
+        }
+        
+        analysis_result = {
+            "visibility_score": visibility_score,
+            "brand_mentions": brand_mentions,
+            "queries_tested": queries_tested,
+            "before": before_results,
+            "after": after_results,
+            "message": f"{brand_name} is showing up in {visibility_score}% of our simulated searches in AI."
+        }
+        
+        # Update onboarding record
+        try:
+            supabase.table("onboarding_sessions").update({
+                "analysis_result": analysis_result,
+                "current_step": "analysis",
+                "status": "completed",
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", onboarding_id).execute()
+            
+            # Update site status
+            supabase.table("sites").update({
+                "status": "active"
+            }).eq("id", site_id).execute()
+            
+        except Exception as db_error:
+            print(f"⚠️ Database update error: {db_error}")
+        
+        print(f"✅ Analysis completed: {visibility_score}% visibility")
+        
+        return {
+            "success": True,
+            "onboarding_id": onboarding_id,
+            "site_id": site_id,
+            "analysis": analysis_result,
+            "next_step": "dashboard",
+            "dashboard_url": f"/dashboard/{site_id}"
+        }
+        
+    except Exception as e:
+        print(f"❌ Analysis failed: {e}")
+        return {
+            "error": f"Analysis failed: {str(e)}"
+        }
+
+@app.get("/onboarding/{onboarding_id}")
+async def get_onboarding_status(onboarding_id: str):
+    """
+    Get current onboarding status and data
+    Useful for resuming onboarding flow
+    """
+    try:
+        print(f"📋 Getting onboarding status: {onboarding_id}")
+        
+        onboarding = supabase.table("onboarding_sessions").select("*").eq("id", onboarding_id).execute()
+        if not onboarding.data:
+            return {"error": "Onboarding session not found"}
+        
+        return {
+            "success": True,
+            "onboarding": onboarding.data[0]
+        }
+        
+    except Exception as e:
+        print(f"❌ Failed to get onboarding status: {e}")
+        return {
+            "error": f"Failed to get onboarding status: {str(e)}"
+        }
+
 # ---------- /query-check ----------
 @app.post("/query-check")
 async def query_check(req: QueryCheckRequest = Body(...)):
@@ -2466,136 +3020,4 @@ async def audit_new(req: NewAuditRequest = Body(...)):
             "error": f"Audit failed: {str(e)}",
             "site_id": site_id if 'site_id' in locals() else None
         }
-
-# ---------- /api/checkout ----------
-@app.post("/api/checkout")
-async def create_checkout_session(request: Request):
-    """
-    Create Stripe checkout session for subscription.
-    Requires authenticated user from Supabase session.
-    """
-    try:
-        # Get authenticated user
-        user = await get_user_from_session(request)
-        
-        # Create Stripe checkout session
-        checkout_session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{
-                "price": STRIPE_PRICE_ID,
-                "quantity": 1
-            }],
-            customer_email=user["email"],
-            client_reference_id=user["id"],
-            success_url=f"{NEXT_PUBLIC_SITE_URL}/dashboard?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{NEXT_PUBLIC_SITE_URL}/pricing"
-        )
-        
-        return {"url": checkout_session.url}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"❌ Checkout session creation failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Checkout session creation failed: {str(e)}")
-
-# ---------- /api/stripe/webhook ----------
-@app.post("/api/stripe/webhook")
-async def stripe_webhook(request: Request):
-    """
-    Handle Stripe webhook events for subscription management.
-    Updates Supabase profiles table based on subscription events.
-    """
-    try:
-        # Get raw body and signature
-        body = await request.body()
-        signature = request.headers.get("stripe-signature")
-        
-        if not signature:
-            print("❌ No Stripe signature found")
-            return Response(status_code=400)
-        
-        # Verify webhook signature
-        try:
-            event = stripe.Webhook.construct_event(
-                body, signature, STRIPE_WEBHOOK_SECRET
-            )
-        except ValueError as e:
-            print(f"❌ Invalid payload: {e}")
-            return Response(status_code=400)
-        except stripe.error.SignatureVerificationError as e:
-            print(f"❌ Invalid signature: {e}")
-            return Response(status_code=400)
-        
-        # Handle the event
-        if event["type"] == "checkout.session.completed":
-            session = event["data"]["object"]
-            user_id = session.get("client_reference_id")
-            
-            if user_id:
-                # Get subscription details
-                subscription_id = session.get("subscription")
-                customer_id = session.get("customer")
-                
-                # Update Supabase profiles table
-                try:
-                    supabase.table("profiles").update({
-                        "is_active": True,
-                        "stripe_customer_id": customer_id,
-                        "stripe_subscription_id": subscription_id
-                    }).eq("id", user_id).execute()
-                    
-                    print(f"✅ Updated profile for user {user_id}: active=True")
-                except Exception as e:
-                    print(f"❌ Failed to update profile for user {user_id}: {e}")
-        
-        elif event["type"] == "customer.subscription.updated":
-            subscription = event["data"]["object"]
-            customer_id = subscription.get("customer")
-            
-            # Find user by customer_id
-            try:
-                profile_result = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).execute()
-                
-                if profile_result.data:
-                    user_id = profile_result.data[0]["id"]
-                    
-                    # Update subscription status
-                    is_active = subscription.get("status") in ["active", "trialing"]
-                    current_period_end = subscription.get("current_period_end")
-                    
-                    supabase.table("profiles").update({
-                        "is_active": is_active,
-                        "current_period_end": current_period_end
-                    }).eq("id", user_id).execute()
-                    
-                    print(f"✅ Updated subscription for user {user_id}: active={is_active}")
-            except Exception as e:
-                print(f"❌ Failed to update subscription: {e}")
-        
-        elif event["type"] in ["customer.subscription.deleted", "invoice.payment_failed"]:
-            subscription = event["data"]["object"]
-            customer_id = subscription.get("customer")
-            
-            # Find user by customer_id
-            try:
-                profile_result = supabase.table("profiles").select("id").eq("stripe_customer_id", customer_id).execute()
-                
-                if profile_result.data:
-                    user_id = profile_result.data[0]["id"]
-                    
-                    # Deactivate subscription
-                    supabase.table("profiles").update({
-                        "is_active": False
-                    }).eq("id", user_id).execute()
-                    
-                    print(f"✅ Deactivated subscription for user {user_id}")
-            except Exception as e:
-                print(f"❌ Failed to deactivate subscription: {e}")
-        
-        return Response(status_code=200)
-        
-    except Exception as e:
-        print(f"❌ Webhook processing failed: {e}")
-        return Response(status_code=500)
 

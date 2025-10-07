@@ -2966,6 +2966,11 @@ async def create_checkout():
     This endpoint is called by the Supabase function after Google OAuth.
     """
     try:
+        # Check if Stripe is configured
+        stripe_key = os.getenv("STRIPE_SECRET_KEY")
+        if not stripe_key:
+            return {"error": "STRIPE_SECRET_KEY not configured"}
+        
         # Create Stripe checkout session
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],

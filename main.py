@@ -25,6 +25,7 @@ from simple_blog_generator import SimpleBlogGenerator
 import re
 import uuid
 from datetime import datetime
+import stripe
 
 
 app = FastAPI()
@@ -44,6 +45,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Configure Stripe
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 def detect_lang(text: str) -> str:
     """
@@ -2953,6 +2957,49 @@ async def query_check(req: QueryCheckRequest = Body(...)):
     except Exception as e:
         print(f"❌ Query check failed: {e}")
         return {"error": f"Query check failed: {str(e)}"}
+
+# ---------- /api/checkout ----------
+@app.post("/api/checkout")
+async def create_checkout():
+    """
+    Create Stripe checkout session for EVIKA subscription.
+    This endpoint is called by the Supabase function after Google OAuth.
+    """
+    try:
+        # Create Stripe checkout session
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'eur',
+                    'product_data': {
+                        'name': 'EVIKA SAAS',
+                        'description': 'AI-powered SEO optimization platform',
+                    },
+                    'unit_amount': 2900,  # €29.00 in cents
+                    'recurring': {
+                        'interval': 'month',
+                    },
+                },
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=f"{os.getenv('FRONTEND_URL', 'https://ascentiq-pro.lovable.app')}/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{os.getenv('FRONTEND_URL', 'https://ascentiq-pro.lovable.app')}/offer",
+            metadata={
+                'service': 'evika',
+                'plan': 'monthly'
+            }
+        )
+        
+        return {
+            "url": checkout_session.url,
+            "session_id": checkout_session.id
+        }
+        
+    except Exception as e:
+        print(f"❌ Checkout creation failed: {e}")
+        return {"error": f"Checkout creation failed: {str(e)}"}
 
 # ---------- /audit-new ----------
 @app.post("/audit-new")

@@ -19,7 +19,7 @@ w3lib==2.1.2
 # LLM and WordPress integration
 openai==1.3.0
 
-# Stripe integration for subscription management
+# Payment processing
 stripe==7.8.0
 
 # JavaScript rendering for complex websites
